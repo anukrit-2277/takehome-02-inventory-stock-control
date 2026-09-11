@@ -12,7 +12,6 @@ export const env = {
   databaseUrl: required('DATABASE_URL'),
   jwt: {
     accessSecret: required('JWT_ACCESS_SECRET'),
-    refreshSecret: required('JWT_REFRESH_SECRET'),
     accessTtl: process.env.ACCESS_TOKEN_TTL ?? '15m',
     refreshTtlDays: Number(process.env.REFRESH_TOKEN_TTL_DAYS ?? 7),
   },
