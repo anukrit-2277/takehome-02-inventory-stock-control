@@ -12,6 +12,7 @@ itemRoutes.use(requireAuth);
 // Staff read items in order to record movements against them, but only managers
 // create, edit or archive them (goals 1 and 2).
 itemRoutes.get('/:id', controller.get);
+itemRoutes.get('/:id/stock', controller.stock);
 itemRoutes.post('/', requireRole('MANAGER'), validate(createItemSchema), controller.create);
 itemRoutes.patch('/:id', requireRole('MANAGER'), validate(updateItemSchema), controller.update);
 itemRoutes.post('/:id/archive', requireRole('MANAGER'), controller.archive);

@@ -2,14 +2,14 @@
  * Seeds the reference data the app needs to be demonstrable: users of both
  * roles, locations, categories, items and staff assignments.
  *
- * Stock movements are deliberately NOT seeded here. They are written in a later
- * phase through the same ledger service the API uses, so demo data is subject
- * to exactly the same validation and balance rules as anything a user records.
+ * Stock movements go through recordMovement(), the same service the API uses, so
+ * the demo data obeys exactly the same rules as anything a user records. Nothing
+ * is inserted straight into the ledger.
  */
 import bcrypt from 'bcryptjs';
-import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
+import { prisma } from '../src/lib/prisma.js';
+import { recordMovement } from '../src/modules/movements/movements.service.js';
 
 const PASSWORD = 'Passw0rd!';
 
@@ -134,7 +134,160 @@ async function main() {
   }
   console.log(`assignments:${assignmentCount}`);
 
+  await seedMovements(users, locations);
+
   console.log(`\nAll demo accounts use password: ${PASSWORD}`);
+}
+
+// ---------------------------------------------------------------------------
+// Stock movements: roughly eight weeks of trading, so the dashboard charts and
+// the low-stock alerts have something real to show.
+// ---------------------------------------------------------------------------
+
+/** Seeded random number generator, so every run produces the same demo data. */
+function makeRandom(seed) {
+  let state = seed;
+  return () => {
+    state = (state * 1664525 + 1013904223) % 4294967296;
+    return state / 4294967296;
+  };
+}
+
+function daysAgo(days) {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  date.setHours(9 + (days % 8), 30, 0, 0);
+  return date;
+}
+
+// How each item should look by the end, so the demo has healthy stock, items
+// sitting on the reorder line, and one that has run out entirely.
+const STOCK_PROFILE = {
+  'FST-1003': 'low',
+  'PWR-2002': 'low',
+  'SAF-3003': 'low',
+  'ELE-4003': 'empty',
+  'CON-5002': 'low',
+};
+
+async function seedMovements(users, locations) {
+  if ((await prisma.stockMovement.count()) > 0) {
+    console.log('movements:  already present, skipping');
+    return;
+  }
+
+  const random = makeRandom(20260911);
+  const randomInt = (min, max) => min + Math.floor(random() * (max - min + 1));
+
+  const manager = actorFor(users['manager@demo.test'], []);
+  // Staff, with the locations the assignment step above gave them. The seed is
+  // held to the same access rules as the API, so a movement is attributed to a
+  // staff member only where they are actually assigned, and to a manager
+  // otherwise.
+  const staffMembers = [
+    actorFor(users['staff@demo.test'], [locations['WH-MAIN'].id, locations['RT-NORTH'].id]),
+    actorFor(users['staff2@demo.test'], [locations['RT-SOUTH'].id]),
+    actorFor(users['staff3@demo.test'], [locations['WH-MAIN'].id, locations['SITE-A'].id, locations['RT-NORTH'].id]),
+  ];
+  const whoWorksAt = (locationId) => {
+    const covering = staffMembers.filter((member) => member.locationIds.includes(locationId));
+    return covering.length > 0 ? covering[randomInt(0, covering.length - 1)] : manager;
+  };
+
+  const main = locations['WH-MAIN'].id;
+  const retail = [locations['RT-NORTH'].id, locations['RT-SOUTH'].id];
+  const items = await prisma.item.findMany({ orderBy: { id: 'asc' } });
+
+  let movementCount = 0;
+  const record = async (input, actor) => {
+    await recordMovement(input, actor);
+    movementCount += 1;
+  };
+
+  for (const item of items) {
+    const profile = STOCK_PROFILE[item.sku] ?? 'healthy';
+    const base = Math.max(item.reorderLevel, 5);
+    // Local copy of this item's balances, so we never try to issue more than
+    // the ledger holds and get rejected by our own rules.
+    const onHand = {};
+
+    const opening = base * (profile === 'healthy' ? 6 : 2);
+    await record({ itemId: item.id, kind: 'RECEIPT', quantity: opening, locationId: main, occurredAt: daysAgo(56) }, manager);
+    onHand[main] = opening;
+
+    // Push some of it out to the shop floors.
+    for (const destination of retail) {
+      const quantity = Math.max(1, Math.round(opening * 0.2));
+      if (onHand[main] < quantity) continue;
+      await record({ itemId: item.id, kind: 'TRANSFER', quantity, sourceLocationId: main, destinationLocationId: destination, occurredAt: daysAgo(randomInt(48, 54)) }, manager);
+      onHand[main] -= quantity;
+      onHand[destination] = (onHand[destination] ?? 0) + quantity;
+    }
+
+    // Eight weeks of selling, a couple of movements a week.
+    for (let week = 7; week >= 0; week -= 1) {
+      for (let n = 0; n < randomInt(1, 3); n += 1) {
+        const day = week * 7 + randomInt(0, 6);
+        if (day < 0) continue;
+
+        const stocked = Object.keys(onHand).filter((id) => onHand[id] > 1);
+        if (stocked.length === 0) break;
+        const locationId = Number(stocked[randomInt(0, stocked.length - 1)]);
+
+        const quantity = Math.max(1, Math.min(onHand[locationId], randomInt(1, Math.ceil(base * 0.4))));
+        await record({ itemId: item.id, kind: 'ISSUE', quantity, locationId, occurredAt: daysAgo(day) }, whoWorksAt(locationId));
+        onHand[locationId] -= quantity;
+      }
+
+      // Occasional restock into the warehouse.
+      if (profile === 'healthy' && random() < 0.25) {
+        const quantity = randomInt(base, base * 2);
+        await record({ itemId: item.id, kind: 'RECEIPT', quantity, locationId: main, occurredAt: daysAgo(week * 7 + 3) }, whoWorksAt(main));
+        onHand[main] = (onHand[main] ?? 0) + quantity;
+      }
+    }
+
+    // Drive the deliberately-low items down to where the alerts will fire.
+    const target =
+      profile === 'empty' ? 0
+      : profile === 'low' ? Math.max(1, item.reorderLevel - randomInt(0, 2))
+      : null;
+
+    if (target !== null) {
+      const total = () => Object.values(onHand).reduce((sum, value) => sum + value, 0);
+
+      // Too much left: issue the excess away, location by location.
+      for (const [id, quantity] of Object.entries(onHand)) {
+        const excess = Math.min(quantity, total() - target);
+        if (excess <= 0) continue;
+        await record({ itemId: item.id, kind: 'ISSUE', quantity: excess, locationId: Number(id), occurredAt: daysAgo(randomInt(0, 3)) }, whoWorksAt(Number(id)));
+        onHand[id] -= excess;
+      }
+
+      // Too little left: a small delivery brings it back onto the reorder line,
+      // which is a more interesting demo than an item sitting flat at zero.
+      const shortfall = target - total();
+      if (shortfall > 0) {
+        await record({ itemId: item.id, kind: 'RECEIPT', quantity: shortfall, locationId: main, occurredAt: daysAgo(randomInt(1, 4)) }, whoWorksAt(main));
+        onHand[main] = (onHand[main] ?? 0) + shortfall;
+      }
+    }
+  }
+
+  // A couple of adjustments, so the demo shows counts being corrected.
+  const [first, second] = items;
+  const firstStock = await prisma.stockMovementLine.aggregate({ where: { itemId: first.id, locationId: main }, _sum: { quantityDelta: true } });
+  if ((firstStock._sum.quantityDelta ?? 0) >= 2) {
+    await record({ itemId: first.id, kind: 'ADJUSTMENT', quantity: -2, locationId: main, reason: 'Cycle count: two boxes damaged in transit', occurredAt: daysAgo(2) }, manager);
+  }
+  await record({ itemId: second.id, kind: 'ADJUSTMENT', quantity: 3, locationId: main, reason: 'Cycle count: pallet found behind racking', occurredAt: daysAgo(1) }, manager);
+
+  console.log(`movements:  ${movementCount}`);
+}
+
+/** recordMovement expects the shape requireAuth builds, so mirror it here. */
+function actorFor(user, locationIds) {
+  return { id: user.id, role: user.role, locationIds };
 }
 
 main()

@@ -1,4 +1,6 @@
 import * as service from './items.service.js';
+// On-hand is derived from the ledger, so the movement service owns that query.
+import { getItemStock } from '../movements/movements.service.js';
 import { parseId } from '../../lib/params.js';
 
 export async function get(req, res) {
@@ -19,4 +21,8 @@ export async function archive(req, res) {
 
 export async function restore(req, res) {
   res.json({ item: await service.restoreItem(parseId(req.params.id), req.user) });
+}
+
+export async function stock(req, res) {
+  res.json(await getItemStock(parseId(req.params.id)));
 }
