@@ -1,0 +1,271 @@
+// Inventory & Stock Control — data model
+//
+// Core invariant: on-hand quantity is NEVER stored. It is always derived by
+// summing stock_movement_lines. Nothing in the app writes a balance column,
+// because there isn't one.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  MANAGER
+  STAFF
+}
+
+enum MovementKind {
+  RECEIPT
+  ISSUE
+  TRANSFER
+  ADJUSTMENT
+}
+
+enum ItemEventType {
+  CREATED
+  FIELD_CHANGED
+  ARCHIVED
+  RESTORED
+  NOTE
+}
+
+// ---------------------------------------------------------------------------
+// People and access
+// ---------------------------------------------------------------------------
+
+model User {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique @db.VarChar(255)
+  passwordHash String   @db.VarChar(255)
+  name         String   @db.VarChar(120)
+  role         Role     @default(STAFF)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  refreshTokens      RefreshToken[]
+  assignments        LocationAssignment[] @relation("AssignedUser")
+  assignmentsGranted LocationAssignment[] @relation("AssignedBy")
+  itemsCreated       Item[]
+  movements          StockMovement[]
+  itemEvents         ItemEvent[]
+  dismissals         AlertDismissal[]
+
+  @@map("users")
+}
+
+// Refresh tokens are stored hashed (sha256 hex) and rotated on every use, so a
+// stolen-and-replayed token can be detected and the family revoked.
+model RefreshToken {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  tokenHash String    @unique @db.VarChar(64)
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model Location {
+  id        Int      @id @default(autoincrement())
+  code      String   @unique @db.VarChar(32)
+  name      String   @db.VarChar(120)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assignments   LocationAssignment[]
+  movementsAt   StockMovement[]      @relation("MovementLocation")
+  movementsFrom StockMovement[]      @relation("MovementSource")
+  movementsTo   StockMovement[]      @relation("MovementDestination")
+  lines         StockMovementLine[]
+
+  @@map("locations")
+}
+
+// Many-to-many: a staff member covers any number of locations, a location has
+// any number of staff. Only a manager may write rows here.
+model LocationAssignment {
+  userId       Int
+  locationId   Int
+  assignedById Int?
+  assignedAt   DateTime @default(now())
+
+  user       User     @relation("AssignedUser", fields: [userId], references: [id], onDelete: Cascade)
+  location   Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  assignedBy User?    @relation("AssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  @@id([userId, locationId])
+  @@index([locationId])
+  @@index([assignedById])
+  @@map("location_assignments")
+}
+
+// ---------------------------------------------------------------------------
+// Catalogue
+// ---------------------------------------------------------------------------
+
+model Category {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique @db.VarChar(80)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items Item[]
+
+  @@map("categories")
+}
+
+model Item {
+  id            Int       @id @default(autoincrement())
+  sku           String    @unique @db.VarChar(64)
+  name          String    @db.VarChar(200)
+  description   String?   @db.Text
+  unitOfMeasure String    @db.VarChar(32)
+  reorderLevel  Int       @default(0)
+  categoryId    Int
+  // Archive is a soft state: archived items keep their full ledger and
+  // timeline, but drop out of day-to-day lists and reject new movements.
+  archivedAt    DateTime?
+  createdById   Int?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  category   Category            @relation(fields: [categoryId], references: [id])
+  createdBy  User?               @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  movements  StockMovement[]
+  lines      StockMovementLine[]
+  events     ItemEvent[]
+  dismissals AlertDismissal[]
+
+  @@index([categoryId])
+  @@index([archivedAt])
+  @@index([name])
+  @@map("items")
+}
+
+// ---------------------------------------------------------------------------
+// The ledger — append-only. No UPDATE or DELETE path exists in the application
+// for either of these two tables.
+// ---------------------------------------------------------------------------
+
+// The semantic record: what a human did. One row per user action.
+model StockMovement {
+  id                    Int          @id @default(autoincrement())
+  itemId                Int
+  kind                  MovementKind
+  // Magnitude for RECEIPT / ISSUE / TRANSFER; signed for ADJUSTMENT.
+  quantity              Int
+  // Single location for RECEIPT / ISSUE / ADJUSTMENT; null for TRANSFER.
+  locationId            Int?
+  // Both set for TRANSFER; null otherwise.
+  sourceLocationId      Int?
+  destinationLocationId Int?
+  // Mandatory for ADJUSTMENT, enforced in the service layer.
+  reason                String?      @db.VarChar(500)
+  note                  String?      @db.Text
+  recordedById          Int
+  occurredAt            DateTime     @default(now())
+
+  item Item @relation(fields: [itemId], references: [id])
+  // Restrict, not SetNull: a location that appears anywhere in the ledger can
+  // never be deleted, because blanking it would silently rewrite history. It
+  // also keeps these columns eligible for the CHECK constraint below, which
+  // MySQL forbids on any column a foreign key may itself modify.
+  location            Location? @relation("MovementLocation", fields: [locationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  sourceLocation      Location? @relation("MovementSource", fields: [sourceLocationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  destinationLocation Location? @relation("MovementDestination", fields: [destinationLocationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  recordedBy          User                @relation(fields: [recordedById], references: [id])
+  lines               StockMovementLine[]
+
+  // Referenced as a composite foreign key by stock_movement_lines, so the
+  // database itself guarantees a line's denormalised itemId/occurredAt match
+  // its parent movement. Redundant against the primary key, but a MySQL FK can
+  // only point at an indexed column list.
+  @@unique([id, itemId, occurredAt], map: "stock_movements_id_item_occurred_key")
+  @@index([itemId, occurredAt])
+  @@index([occurredAt])
+  @@index([recordedById])
+  @@index([locationId])
+  @@index([sourceLocationId])
+  @@index([destinationLocationId])
+  @@map("stock_movements")
+}
+
+// The arithmetic: signed deltas, double-entry style. A RECEIPT/ISSUE/ADJUSTMENT
+// writes one line; a TRANSFER writes two (-qty at source, +qty at destination)
+// in the same transaction, so a half-applied transfer cannot exist.
+//
+// itemId and occurredAt are denormalised copies of their StockMovement parent so
+// that every balance, filter and dashboard query reads this table alone.
+model StockMovementLine {
+  id            Int      @id @default(autoincrement())
+  movementId    Int
+  itemId        Int
+  locationId    Int
+  quantityDelta Int
+  occurredAt    DateTime
+
+  // Composite FK: a line cannot claim a different item or timestamp than the
+  // movement it belongs to. The denormalisation is now database-enforced, not
+  // convention-enforced.
+  movement StockMovement @relation(fields: [movementId, itemId, occurredAt], references: [id, itemId, occurredAt])
+  item     Item          @relation(fields: [itemId], references: [id])
+  location Location      @relation(fields: [locationId], references: [id])
+
+  @@index([itemId, locationId])
+  @@index([locationId])
+  @@index([occurredAt])
+  @@index([movementId])
+  @@map("stock_movement_lines")
+}
+
+// ---------------------------------------------------------------------------
+// History and alerts
+// ---------------------------------------------------------------------------
+
+// Append-only timeline: creation, every tracked field change with old/new
+// value, archive/restore, and free-text notes. No edit or delete path exists,
+// for managers either.
+model ItemEvent {
+  id        Int           @id @default(autoincrement())
+  itemId    Int
+  type      ItemEventType
+  field     String?       @db.VarChar(64)
+  oldValue  String?       @db.Text
+  newValue  String?       @db.Text
+  note      String?       @db.Text
+  actorId   Int?
+  createdAt DateTime      @default(now())
+
+  item  Item  @relation(fields: [itemId], references: [id])
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([itemId, createdAt])
+  @@map("item_events")
+}
+
+// A dismissal suppresses an item's low-stock alert while resolvedAt is null.
+// When on-hand later rises above the reorder level we stamp resolvedAt, which
+// re-arms the alert for the next time the item falls back at or below it.
+model AlertDismissal {
+  id            Int       @id @default(autoincrement())
+  itemId        Int
+  dismissedById Int?
+  dismissedAt   DateTime  @default(now())
+  resolvedAt    DateTime?
+
+  item        Item  @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  dismissedBy User? @relation(fields: [dismissedById], references: [id], onDelete: SetNull)
+
+  @@index([itemId, resolvedAt])
+  @@map("alert_dismissals")
+}
