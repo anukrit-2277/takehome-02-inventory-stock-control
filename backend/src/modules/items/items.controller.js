@@ -3,6 +3,10 @@ import * as service from './items.service.js';
 import { getItemStock } from '../movements/movements.service.js';
 import { parseId } from '../../lib/params.js';
 
+export async function list(req, res) {
+  res.json(await service.listItems(req.validatedQuery));
+}
+
 export async function get(req, res) {
   res.json({ item: await service.getItem(parseId(req.params.id)) });
 }

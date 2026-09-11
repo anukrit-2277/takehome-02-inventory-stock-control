@@ -1,4 +1,7 @@
+import { Prisma } from '@prisma/client';
+
 import { prisma } from '../../lib/prisma.js';
+import { toSkipTake, withPageInfo } from '../../lib/pagination.js';
 import { badRequest, conflict, notFound } from '../../lib/errors.js';
 
 // Changes to these fields are written to the item's timeline (goal 9).
@@ -112,4 +115,104 @@ async function assertCategoryExists(tx, categoryId) {
     select: { id: true },
   });
   if (!category) throw badRequest(`Category ${categoryId} does not exist`);
+}
+
+// ---------------------------------------------------------------------------
+// The item list (goal 6).
+//
+// This is the one place that drops to SQL. On-hand is derived by summing the
+// ledger, and you cannot filter or sort by an aggregate of a related table
+// through Prisma's query API — so searching, filtering, sorting and paging all
+// have to happen in one statement to stay on the server.
+// ---------------------------------------------------------------------------
+
+// Only these columns can be sorted by. The value is interpolated into the SQL
+// directly, so it must never come from user input — the schema's enum picks a
+// key here, and this map decides the column.
+const SORT_COLUMNS = {
+  name: 'i.name',
+  sku: 'i.sku',
+  onHand: 'onHand',
+  reorderLevel: 'i.reorderLevel',
+  createdAt: 'i.createdAt',
+};
+
+export async function listItems(params) {
+  const { search, categoryId, locationId, archived, belowReorder, sort, direction } = params;
+  const { skip, take } = toSkipTake(params);
+
+  const filters = [];
+
+  if (search) {
+    const term = `%${search}%`;
+    filters.push(Prisma.sql`(i.name LIKE ${term} OR i.sku LIKE ${term})`);
+  }
+  if (categoryId) filters.push(Prisma.sql`i.categoryId = ${categoryId}`);
+  if (archived === 'active') filters.push(Prisma.sql`i.archivedAt IS NULL`);
+  if (archived === 'archived') filters.push(Prisma.sql`i.archivedAt IS NOT NULL`);
+
+  // "At or below reorder level" always means the total across every location,
+  // the same definition the low-stock alerts use, even when the list is
+  // filtered to one location.
+  if (belowReorder) filters.push(Prisma.sql`COALESCE(total.qty, 0) <= i.reorderLevel`);
+
+  const where = filters.length > 0 ? Prisma.sql`WHERE ${Prisma.join(filters, ' AND ')}` : Prisma.empty;
+
+  // Filtering by location narrows on-hand to that location, and an inner join
+  // means only items that have actually moved through it are listed.
+  const locationJoin = locationId
+    ? Prisma.sql`
+      JOIN (
+        SELECT itemId, SUM(quantityDelta) AS qty
+        FROM stock_movement_lines WHERE locationId = ${locationId} GROUP BY itemId
+      ) atLocation ON atLocation.itemId = i.id`
+    : Prisma.empty;
+
+  const from = Prisma.sql`
+    FROM items i
+    JOIN categories c ON c.id = i.categoryId
+    LEFT JOIN (
+      SELECT itemId, SUM(quantityDelta) AS qty FROM stock_movement_lines GROUP BY itemId
+    ) total ON total.itemId = i.id
+    ${locationJoin}
+    ${where}
+  `;
+
+  const onHand = locationId ? Prisma.sql`atLocation.qty` : Prisma.sql`total.qty`;
+  const orderBy = Prisma.raw(`${SORT_COLUMNS[sort]} ${direction === 'desc' ? 'DESC' : 'ASC'}`);
+
+  const [rows, counted] = await Promise.all([
+    prisma.$queryRaw`
+      SELECT i.id, i.sku, i.name, i.description, i.unitOfMeasure, i.reorderLevel,
+             i.archivedAt, c.id AS categoryId, c.name AS categoryName,
+             CAST(COALESCE(${onHand}, 0) AS SIGNED) AS onHand,
+             CAST(COALESCE(total.qty, 0) AS SIGNED) AS totalOnHand
+      ${from}
+      ORDER BY ${orderBy}, i.id ASC
+      LIMIT ${take} OFFSET ${skip}
+    `,
+    prisma.$queryRaw`SELECT COUNT(*) AS total ${from}`,
+  ]);
+
+  const total = Number(counted[0].total);
+  return withPageInfo(rows.map(presentRow), total, params);
+}
+
+/** Reshapes a flat SQL row into the nested shape the rest of the API returns. */
+function presentRow(row) {
+  const totalOnHand = Number(row.totalOnHand);
+  return {
+    id: row.id,
+    sku: row.sku,
+    name: row.name,
+    description: row.description,
+    unitOfMeasure: row.unitOfMeasure,
+    reorderLevel: row.reorderLevel,
+    archivedAt: row.archivedAt,
+    category: { id: row.categoryId, name: row.categoryName },
+    // Narrowed to one location when the list is filtered by location.
+    onHand: Number(row.onHand),
+    totalOnHand,
+    belowReorderLevel: totalOnHand <= row.reorderLevel,
+  };
 }
