@@ -1,6 +1,11 @@
 import { Router } from 'express';
+
 import { prisma } from '../lib/prisma.js';
 import { authRoutes } from '../modules/auth/auth.routes.js';
+import { categoryRoutes } from '../modules/categories/categories.routes.js';
+import { locationRoutes } from '../modules/locations/locations.routes.js';
+import { userRoutes } from '../modules/users/users.routes.js';
+import { itemRoutes } from '../modules/items/items.routes.js';
 
 export const router = Router();
 
@@ -10,5 +15,7 @@ router.get('/health', async (_req, res) => {
 });
 
 router.use('/auth', authRoutes);
-
-// Feature routers are mounted here as each phase lands.
+router.use('/categories', categoryRoutes);
+router.use('/locations', locationRoutes);
+router.use('/users', userRoutes);
+router.use('/items', itemRoutes);
