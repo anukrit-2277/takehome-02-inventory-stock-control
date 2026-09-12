@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 
 import { prisma } from '../../lib/prisma.js';
 import { toSkipTake, withPageInfo } from '../../lib/pagination.js';
+import { resolveDismissalIfRecovered } from '../alerts/alerts.service.js';
 import { badRequest, conflict, notFound } from '../../lib/errors.js';
 
 // Changes to these fields are written to the item's timeline (goal 9).
@@ -43,6 +44,12 @@ export async function updateItem(id, data, actor) {
 
     const after = await tx.item.update({ where: { id }, data, include: itemInclude });
     await recordFieldChanges(tx, before, after, actor);
+
+    // Lowering the reorder level can lift an item back above its line, which
+    // re-arms a dismissed alert exactly as a delivery would (goal 10).
+    if (before.reorderLevel !== after.reorderLevel) {
+      await resolveDismissalIfRecovered(tx, id);
+    }
     return after;
   });
 }
@@ -215,4 +222,37 @@ function presentRow(row) {
     totalOnHand,
     belowReorderLevel: totalOnHand <= row.reorderLevel,
   };
+}
+
+// ---------------------------------------------------------------------------
+// The item timeline (goal 9). Append-only: there is no update or delete path
+// here, and the database refuses one anyway.
+// ---------------------------------------------------------------------------
+
+/** Creation, every tracked field change, archive/restore, and notes. */
+export async function getTimeline(itemId, pagination) {
+  await getItem(itemId); // 404s for an unknown item before returning an empty page
+
+  const where = { itemId };
+  const [rows, total] = await Promise.all([
+    prisma.itemEvent.findMany({
+      where,
+      include: { actor: { select: { id: true, name: true } } },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      ...toSkipTake(pagination),
+    }),
+    prisma.itemEvent.count({ where }),
+  ]);
+
+  return withPageInfo(rows, total, pagination);
+}
+
+/** Notes sit on the same timeline as field changes, not in a separate list. */
+export async function addNote(itemId, note, actor) {
+  await getItem(itemId);
+
+  return prisma.itemEvent.create({
+    data: { itemId, type: 'NOTE', note, actorId: actor.id },
+    include: { actor: { select: { id: true, name: true } } },
+  });
 }

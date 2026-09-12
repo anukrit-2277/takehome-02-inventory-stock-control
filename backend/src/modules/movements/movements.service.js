@@ -1,6 +1,7 @@
 import { prisma } from '../../lib/prisma.js';
 import { conflict, forbidden, notFound } from '../../lib/errors.js';
 import { assertCanActAtLocations } from '../../lib/access.js';
+import { resolveDismissalIfRecovered } from '../alerts/alerts.service.js';
 import { toSkipTake, withPageInfo } from '../../lib/pagination.js';
 
 /**
@@ -55,7 +56,7 @@ export async function recordMovement(input, actor) {
     assertLocationsAcceptStock(lines, locations);
     await assertStockAvailable(tx, input.itemId, lines, locations);
 
-    return tx.stockMovement.create({
+    const movement = await tx.stockMovement.create({
       data: {
         itemId: input.itemId,
         kind: input.kind,
@@ -73,6 +74,12 @@ export async function recordMovement(input, actor) {
       },
       include: movementInclude,
     });
+
+    // A delivery can lift the item back above its reorder level, which clears a
+    // dismissed alert so it can fire again next time (goal 10).
+    await resolveDismissalIfRecovered(tx, input.itemId);
+
+    return movement;
   });
 }
 

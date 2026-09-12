@@ -1,7 +1,13 @@
 import { Router } from 'express';
 
 import * as controller from './items.controller.js';
-import { createItemSchema, updateItemSchema, listItemsSchema } from './items.schemas.js';
+import {
+  createItemSchema,
+  updateItemSchema,
+  listItemsSchema,
+  createNoteSchema,
+  timelineQuerySchema,
+} from './items.schemas.js';
 import { validate } from '../../middleware/validate.js';
 import { requireAuth, requireRole } from '../../middleware/auth.js';
 
@@ -14,6 +20,10 @@ itemRoutes.use(requireAuth);
 itemRoutes.get('/', validate(listItemsSchema, 'query'), controller.list);
 itemRoutes.get('/:id', controller.get);
 itemRoutes.get('/:id/stock', controller.stock);
+itemRoutes.get('/:id/timeline', validate(timelineQuerySchema, 'query'), controller.timeline);
+
+// Staff leave notes too — the brief calls them "notes staff leave about it".
+itemRoutes.post('/:id/notes', validate(createNoteSchema), controller.addNote);
 itemRoutes.post('/', requireRole('MANAGER'), validate(createItemSchema), controller.create);
 itemRoutes.patch('/:id', requireRole('MANAGER'), validate(updateItemSchema), controller.update);
 itemRoutes.post('/:id/archive', requireRole('MANAGER'), controller.archive);

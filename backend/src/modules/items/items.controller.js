@@ -30,3 +30,12 @@ export async function restore(req, res) {
 export async function stock(req, res) {
   res.json(await getItemStock(parseId(req.params.id)));
 }
+
+export async function timeline(req, res) {
+  res.json(await service.getTimeline(parseId(req.params.id), req.validatedQuery));
+}
+
+export async function addNote(req, res) {
+  const event = await service.addNote(parseId(req.params.id), req.body.note, req.user);
+  res.status(201).json({ event });
+}

@@ -10,6 +10,7 @@ import { movementRoutes } from '../modules/movements/movements.routes.js';
 import { importRoutes } from '../modules/imports/imports.routes.js';
 import { exportRoutes } from '../modules/exports/exports.routes.js';
 import { dashboardRoutes } from '../modules/dashboard/dashboard.routes.js';
+import { alertRoutes } from '../modules/alerts/alerts.routes.js';
 
 export const router = Router();
 
@@ -27,3 +28,4 @@ router.use('/movements', movementRoutes);
 router.use('/imports', importRoutes);
 router.use('/exports', exportRoutes);
 router.use('/dashboard', dashboardRoutes);
+router.use('/alerts', alertRoutes);

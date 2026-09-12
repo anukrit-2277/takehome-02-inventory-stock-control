@@ -32,3 +32,9 @@ export const listItemsSchema = paginationSchema.extend({
   sort: z.enum(['name', 'sku', 'onHand', 'reorderLevel', 'createdAt']).default('name'),
   direction: z.enum(['asc', 'desc']).default('asc'),
 });
+
+export const createNoteSchema = z.object({
+  note: z.string().trim().min(1, 'A note cannot be empty').max(2000),
+});
+
+export const timelineQuerySchema = paginationSchema;
