@@ -95,8 +95,8 @@ export function ItemFormModal({ open, item, categories, onClose, onSaved }) {
 
         <ErrorMessage error={error} />
 
-        <div className="flex justify-end gap-2 pt-1">
-          <Button type="button" variant="secondary" onClick={onClose}>
+        <div className="-mx-5 -mb-4 mt-5 flex justify-end gap-2 border-t border-slate-200/80 bg-slate-50/60 px-5 py-3">
+          <Button variant="secondary" onClick={onClose}>
             Cancel
           </Button>
           <Button type="submit" disabled={saving}>

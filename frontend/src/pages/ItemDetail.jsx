@@ -5,14 +5,22 @@ import { categories as categoriesApi, items, locations as locationsApi, movement
 import { useAuth } from '../context/AuthContext.jsx';
 import { useAlerts } from '../context/AlertsContext.jsx';
 import { useFetch } from '../hooks/useFetch.js';
-import { formatDateTime, signed } from '../lib/format.js';
-import { Badge, Button, Card, EmptyState, ErrorMessage, Input } from '../components/ui.jsx';
+import { formatDateTime } from '../lib/format.js';
+import { Badge, Button, Card, EmptyState, ErrorMessage, Input, PanelHeader } from '../components/ui.jsx';
 import { FullPageSpinner, Spinner } from '../components/Spinner.jsx';
 import { Pagination } from '../components/Pagination.jsx';
 import { ItemFormModal } from '../components/ItemFormModal.jsx';
 import { MovementFormModal } from '../components/MovementFormModal.jsx';
+import {
+  IconArchive, IconChevronLeft, IconEdit, IconMovements, IconNote, IconPlus,
+} from '../components/Icons.jsx';
 
-const MOVEMENT_TONE = { RECEIPT: 'green', ISSUE: 'amber', TRANSFER: 'blue', ADJUSTMENT: 'red' };
+const KINDS = {
+  RECEIPT: { tone: 'green', label: 'Receipt' },
+  ISSUE: { tone: 'amber', label: 'Issue' },
+  TRANSFER: { tone: 'blue', label: 'Transfer' },
+  ADJUSTMENT: { tone: 'red', label: 'Adjustment' },
+};
 
 export function ItemDetail() {
   const { id } = useParams();
@@ -69,34 +77,50 @@ export function ItemDetail() {
 
   const current = item.data.item;
   const archived = Boolean(current.archivedAt);
+  const total = stock.data?.totalOnHand ?? 0;
+  const critical = stock.data && total === 0;
+  const low = stock.data?.belowReorderLevel && !critical;
 
   return (
-    <div className="space-y-4">
-      <Link to="/items" className="text-sm text-brand-600 hover:underline">← Back to items</Link>
+    <div>
+      <Link
+        to="/items"
+        className="mb-3 inline-flex items-center gap-1 text-[12px] font-medium text-slate-500 transition hover:text-slate-900"
+      >
+        <IconChevronLeft className="h-3.5 w-3.5" />
+        Back to items
+      </Link>
 
-      <Card className="p-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
+      <Card className="overflow-hidden">
+        <div className="flex flex-wrap items-start justify-between gap-4 p-5">
+          <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="font-mono text-xs text-slate-500">{current.sku}</span>
+              <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-600">{current.sku}</span>
+              <Badge tone="neutral">{current.category.name}</Badge>
               {archived && <Badge tone="slate">Archived</Badge>}
-              {stock.data?.belowReorderLevel && <Badge tone="red">At or below reorder level</Badge>}
+              {critical && <Badge tone="red" dot>Out of stock</Badge>}
+              {low && <Badge tone="amber" dot>At or below reorder level</Badge>}
             </div>
-            <h1 className="mt-1 text-lg font-semibold text-slate-900">{current.name}</h1>
-            {current.description && <p className="mt-1 max-w-2xl text-sm text-slate-600">{current.description}</p>}
-            <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-sm">
-              <div><dt className="inline text-slate-500">Category: </dt><dd className="inline text-slate-800">{current.category.name}</dd></div>
-              <div><dt className="inline text-slate-500">Unit: </dt><dd className="inline text-slate-800">{current.unitOfMeasure}</dd></div>
-              <div><dt className="inline text-slate-500">Reorder level: </dt><dd className="inline text-slate-800">{current.reorderLevel}</dd></div>
-            </dl>
+
+            <h1 className="mt-2 text-[19px] font-semibold tracking-tight text-slate-900">{current.name}</h1>
+            {current.description && <p className="mt-1 max-w-2xl text-[13px] text-slate-500">{current.description}</p>}
           </div>
 
           <div className="flex flex-wrap gap-2">
-            {!archived && <Button onClick={() => setRecording(true)}>Record movement</Button>}
+            {!archived && (
+              <Button onClick={() => setRecording(true)}>
+                <IconPlus className="h-4 w-4" />
+                Record movement
+              </Button>
+            )}
             {isManager && (
               <>
-                <Button variant="secondary" onClick={() => setEditing(true)}>Edit</Button>
+                <Button variant="secondary" onClick={() => setEditing(true)}>
+                  <IconEdit className="h-4 w-4" />
+                  Edit
+                </Button>
                 <Button variant="secondary" onClick={toggleArchive} disabled={busy}>
+                  <IconArchive className="h-4 w-4" />
                   {archived ? 'Restore' : 'Archive'}
                 </Button>
               </>
@@ -104,46 +128,50 @@ export function ItemDetail() {
           </div>
         </div>
 
-        <ErrorMessage error={actionError} className="mt-3" />
+        {actionError && <div className="px-5 pb-4"><ErrorMessage error={actionError} /></div>}
+
         {archived && (
-          <p className="mt-3 rounded-md bg-slate-100 px-3 py-2 text-sm text-slate-600">
+          <p className="border-t border-slate-200/80 bg-slate-50 px-5 py-2.5 text-[12px] text-slate-600">
             This item is archived. Its history is kept, but no new movements can be recorded
             against it until it is restored.
           </p>
         )}
-      </Card>
 
-      <Card className="p-5">
-        <div className="flex items-baseline justify-between">
-          <h2 className="text-sm font-semibold text-slate-900">Stock on hand</h2>
-          <span className="text-xs text-slate-500">Summed from the ledger, never stored</span>
-        </div>
-
-        {stock.loading && !stock.data ? (
-          <div className="py-6 text-center"><Spinner /></div>
-        ) : (
-          <div className="mt-3 flex flex-wrap items-end gap-6">
-            <div>
-              <p className="text-3xl font-semibold tabular-nums text-slate-900">{stock.data.totalOnHand}</p>
-              <p className="text-xs text-slate-500">total {current.unitOfMeasure}</p>
-            </div>
-            <div className="flex flex-wrap gap-4">
-              {stock.data.byLocation.map((row) => (
-                <div key={row.location.id} className="rounded-md bg-slate-50 px-3 py-2">
-                  <p className="text-lg font-medium tabular-nums text-slate-900">{row.onHand}</p>
-                  <p className="text-xs text-slate-500">{row.location.code}</p>
-                </div>
-              ))}
-              {stock.data.byLocation.length === 0 && (
-                <p className="text-sm text-slate-500">No movements recorded yet.</p>
-              )}
-            </div>
+        {/* Stock strip: the total, then the same figure split by location. */}
+        <div className="flex flex-wrap items-stretch gap-px border-t border-slate-200/80 bg-slate-200/80">
+          <div className="flex min-w-44 flex-col justify-center bg-white px-5 py-4">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Total on hand</span>
+            {stock.loading && !stock.data ? (
+              <Spinner className="mt-2 h-5 w-5" />
+            ) : (
+              <span className={`mt-1 text-[28px] font-semibold leading-none tracking-tight ${critical ? 'text-rose-600' : low ? 'text-amber-600' : 'text-slate-900'}`}>
+                {total.toLocaleString()}
+                <span className="ml-1.5 text-[12px] font-normal text-slate-400">{current.unitOfMeasure}</span>
+              </span>
+            )}
+            <span className="mt-1.5 text-[11px] text-slate-400">Reorder at {current.reorderLevel.toLocaleString()}</span>
           </div>
-        )}
+
+          {(stock.data?.byLocation ?? []).map((row) => (
+            <div key={row.location.id} className="flex min-w-32 flex-1 flex-col justify-center bg-white px-4 py-4">
+              <span className="font-mono text-[11px] text-slate-400">{row.location.code}</span>
+              <span className="mt-1 text-[18px] font-semibold leading-none text-slate-800 tnum">
+                {row.onHand.toLocaleString()}
+              </span>
+              <span className="mt-1.5 truncate text-[11px] text-slate-400">{row.location.name}</span>
+            </div>
+          ))}
+
+          {stock.data?.byLocation.length === 0 && (
+            <div className="flex flex-1 items-center bg-white px-5 py-4 text-[13px] text-slate-400">
+              No movements recorded yet.
+            </div>
+          )}
+        </div>
       </Card>
 
-      <Card className="overflow-hidden">
-        <div className="flex gap-1 border-b border-slate-200 px-4 pt-3">
+      <Card className="mt-4 overflow-hidden">
+        <div className="flex gap-6 border-b border-slate-200/80 px-4">
           {[
             ['movements', `Movements${history.data ? ` (${history.data.total})` : ''}`],
             ['timeline', `Timeline${timeline.data ? ` (${timeline.data.total})` : ''}`],
@@ -152,8 +180,10 @@ export function ItemDetail() {
               key={key}
               type="button"
               onClick={() => setTab(key)}
-              className={`rounded-t-md px-3 py-2 text-sm font-medium ${
-                tab === key ? 'bg-white text-brand-700 ring-1 ring-slate-200 ring-b-0' : 'text-slate-500 hover:text-slate-800'
+              className={`-mb-px border-b-2 py-2.5 text-[13px] font-medium transition ${
+                tab === key
+                  ? 'border-brand-600 text-slate-900'
+                  : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-800'
               }`}
             >
               {label}
@@ -186,38 +216,46 @@ export function ItemDetail() {
 
 /** Full movement history for the item, newest first (goal 3). */
 function MovementList({ state, onPage }) {
-  if (state.loading && !state.data) return <div className="py-10 text-center"><Spinner /></div>;
+  if (state.loading && !state.data) return <div className="py-12 text-center"><Spinner /></div>;
   if (state.error) return <ErrorMessage error={state.error} className="m-4" />;
   if (state.data.total === 0) {
-    return <EmptyState title="No movements yet">Record a receipt to start this item's ledger.</EmptyState>;
+    return <EmptyState title="No movements yet" icon={IconMovements}>Record a receipt to start this item's ledger.</EmptyState>;
   }
 
   return (
     <>
-      <ul className={`divide-y divide-slate-100 ${state.loading ? 'opacity-40' : ''}`}>
-        {state.data.data.map((movement) => (
-          <li key={movement.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 text-sm">
-            <Badge tone={MOVEMENT_TONE[movement.kind]}>{movement.kind.toLowerCase()}</Badge>
+      <ul className={`divide-y divide-slate-100 transition-opacity ${state.loading ? 'opacity-40' : ''}`}>
+        {state.data.data.map((movement) => {
+          const kind = KINDS[movement.kind];
+          const delta = movement.kind === 'ISSUE' ? -movement.quantity : movement.quantity;
+          return (
+            <li key={movement.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 text-[13px] transition-colors hover:bg-slate-50">
+              <Badge tone={kind.tone}>{kind.label}</Badge>
 
-            <span className="font-medium tabular-nums text-slate-900">
-              {movement.kind === 'ISSUE' ? signed(-movement.quantity) : signed(movement.quantity)}
-            </span>
+              <span className={`w-16 text-right font-semibold tnum ${delta < 0 ? 'text-rose-600' : 'text-emerald-700'}`}>
+                {delta > 0 ? '+' : ''}{delta.toLocaleString()}
+              </span>
 
-            <span className="text-slate-700">
-              {movement.kind === 'TRANSFER'
-                ? `${movement.sourceLocation.code} → ${movement.destinationLocation.code}`
-                : movement.location.code}
-            </span>
+              <span className="font-mono text-[12px] text-slate-600">
+                {movement.kind === 'TRANSFER' ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    {movement.sourceLocation.code}
+                    <span className="text-slate-300">→</span>
+                    {movement.destinationLocation.code}
+                  </span>
+                ) : movement.location.code}
+              </span>
 
-            {movement.reason && <span className="text-slate-500">“{movement.reason}”</span>}
-            {movement.note && <span className="text-slate-500">{movement.note}</span>}
+              {movement.reason && <span className="italic text-slate-500">“{movement.reason}”</span>}
+              {movement.note && <span className="text-slate-500">{movement.note}</span>}
 
-            <span className="ml-auto text-right text-xs text-slate-500">
-              {movement.recordedBy.name}
-              <span className="block">{formatDateTime(movement.occurredAt)}</span>
-            </span>
-          </li>
-        ))}
+              <span className="ml-auto text-right">
+                <span className="block text-[12px] text-slate-600">{movement.recordedBy.name}</span>
+                <span className="block text-[11px] text-slate-400 tnum">{formatDateTime(movement.occurredAt)}</span>
+              </span>
+            </li>
+          );
+        })}
       </ul>
       <Pagination {...state.data} onChange={onPage} noun="movements" />
     </>
@@ -225,11 +263,14 @@ function MovementList({ state, onPage }) {
 }
 
 const EVENT_LABEL = {
-  CREATED: 'Item created',
+  CREATED: 'Created',
   ARCHIVED: 'Archived',
   RESTORED: 'Restored',
   NOTE: 'Note',
   FIELD_CHANGED: 'Changed',
+};
+const EVENT_TONE = {
+  CREATED: 'green', ARCHIVED: 'slate', RESTORED: 'blue', NOTE: 'neutral', FIELD_CHANGED: 'neutral',
 };
 
 /** Creation, field changes and notes, all on one record nobody can edit (goal 9). */
@@ -255,7 +296,7 @@ function TimelineList({ state, itemId, onPage, onAdded }) {
 
   return (
     <>
-      <form onSubmit={addNote} className="flex flex-wrap gap-2 border-b border-slate-100 px-4 py-3">
+      <form onSubmit={addNote} className="flex flex-wrap gap-2 border-b border-slate-100 bg-slate-50/60 px-4 py-2.5">
         <Input
           value={note}
           onChange={(e) => setNote(e.target.value)}
@@ -265,20 +306,21 @@ function TimelineList({ state, itemId, onPage, onAdded }) {
           required
         />
         <Button type="submit" disabled={saving || !note.trim()}>
+          <IconNote className="h-4 w-4" />
           {saving ? 'Adding…' : 'Add note'}
         </Button>
       </form>
       <ErrorMessage error={error} className="m-4" />
 
       {state.loading && !state.data ? (
-        <div className="py-10 text-center"><Spinner /></div>
+        <div className="py-12 text-center"><Spinner /></div>
       ) : (
         <>
-          <ul className={`divide-y divide-slate-100 ${state.loading ? 'opacity-40' : ''}`}>
+          <ul className={`divide-y divide-slate-100 transition-opacity ${state.loading ? 'opacity-40' : ''}`}>
             {state.data.data.map((event) => (
-              <li key={event.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-4 py-3 text-sm">
-                <span className="w-24 shrink-0 text-xs font-medium uppercase tracking-wide text-slate-400">
-                  {EVENT_LABEL[event.type]}
+              <li key={event.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-4 py-2 text-[13px] transition-colors hover:bg-slate-50">
+                <span className="w-24 shrink-0">
+                  <Badge tone={EVENT_TONE[event.type]}>{EVENT_LABEL[event.type]}</Badge>
                 </span>
 
                 <span className="flex-1 text-slate-700">
@@ -286,16 +328,17 @@ function TimelineList({ state, itemId, onPage, onAdded }) {
                   {event.type === 'FIELD_CHANGED' && (
                     <>
                       <span className="font-medium text-slate-900">{event.field}</span>{' '}
-                      <span className="text-slate-500 line-through">{event.oldValue || '—'}</span>{' '}
-                      → <span className="text-slate-900">{event.newValue || '—'}</span>
+                      <span className="text-slate-400 line-through">{event.oldValue || '—'}</span>
+                      <span className="mx-1 text-slate-300">→</span>
+                      <span className="font-medium text-slate-900">{event.newValue || '—'}</span>
                     </>
                   )}
-                  {event.type === 'CREATED' && <span className="font-mono text-xs">{event.newValue}</span>}
+                  {event.type === 'CREATED' && <span className="font-mono text-[12px] text-slate-500">{event.newValue}</span>}
                 </span>
 
-                <span className="text-right text-xs text-slate-500">
-                  {event.actor?.name ?? 'Unknown'}
-                  <span className="block">{formatDateTime(event.createdAt)}</span>
+                <span className="text-right">
+                  <span className="block text-[12px] text-slate-600">{event.actor?.name ?? 'Unknown'}</span>
+                  <span className="block text-[11px] text-slate-400 tnum">{formatDateTime(event.createdAt)}</span>
                 </span>
               </li>
             ))}

@@ -88,22 +88,45 @@ export function MovementFormModal({ open, item, locations, onClose, onRecorded }
 
   const selectedKind = kinds.find((k) => k.value === kind);
 
+  // A segmented control reads faster than a dropdown for four fixed choices,
+  // and shows all of them at once so staff can see Adjustment is not offered.
+  const kindPicker = (
+    <div className="grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1 sm:grid-cols-4">
+      {kinds.map((k) => (
+        <button
+          key={k.value}
+          type="button"
+          onClick={() => setKind(k.value)}
+          aria-pressed={kind === k.value}
+          className={`h-7 rounded-md text-[12px] font-medium transition ${
+            kind === k.value ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          {k.label}
+        </button>
+      ))}
+    </div>
+  );
+
   return (
     <Modal open={open} title={`Record a movement — ${item.sku}`} onClose={onClose}>
       {allowed.length === 0 ? (
-        <p className="text-sm text-slate-600">
+        <p className="text-[13px] text-slate-600">
           You are not assigned to any location yet, so you cannot record movements. Ask a manager to
           assign you.
         </p>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
-          <Field label="Kind" hint={selectedKind?.help}>
-            <Select value={kind} onChange={(e) => setKind(e.target.value)}>
-              {kinds.map((k) => (
-                <option key={k.value} value={k.value}>{k.label}</option>
-              ))}
+          <div>
+            <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">Kind</span>
+            {kindPicker}
+            <span className="mt-1.5 block text-xs text-slate-500">{selectedKind?.help}</span>
+            {/* Kept for assistive technology and for the existing tests, which
+                address this control by its label. */}
+            <Select value={kind} onChange={(e) => setKind(e.target.value)} aria-label="Kind" className="sr-only">
+              {kinds.map((k) => (<option key={k.value} value={k.value}>{k.label}</option>))}
             </Select>
-          </Field>
+          </div>
 
           {kind === 'TRANSFER' ? (
             <div className="grid gap-4 sm:grid-cols-2">
@@ -153,8 +176,8 @@ export function MovementFormModal({ open, item, locations, onClose, onRecorded }
 
           <ErrorMessage error={error} />
 
-          <div className="flex justify-end gap-2 pt-1">
-            <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+          <div className="-mx-5 -mb-4 mt-5 flex justify-end gap-2 border-t border-slate-200/80 bg-slate-50/60 px-5 py-3">
+            <Button variant="secondary" onClick={onClose}>Cancel</Button>
             <Button type="submit" disabled={saving}>{saving ? 'Recording…' : 'Record movement'}</Button>
           </div>
         </form>

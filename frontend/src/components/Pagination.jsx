@@ -1,4 +1,5 @@
 import { Button } from './ui.jsx';
+import { IconChevronLeft, IconChevronRight } from './Icons.jsx';
 
 /** Page controls that also state the total, which goal 6 asks for. */
 export function Pagination({ page, pageSize, total, totalPages, onChange, noun = 'results' }) {
@@ -8,22 +9,24 @@ export function Pagination({ page, pageSize, total, totalPages, onChange, noun =
   const last = Math.min(page * pageSize, total);
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-4 py-3">
-      <p className="text-sm text-slate-600">
-        Showing <span className="font-medium text-slate-900">{first}</span>–
-        <span className="font-medium text-slate-900">{last}</span> of{' '}
-        <span className="font-medium text-slate-900">{total}</span> {noun}
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200/80 bg-slate-50/50 px-4 py-2.5">
+      <p className="text-[12px] text-slate-500">
+        <span className="font-medium text-slate-700 tnum">{first}</span>–
+        <span className="font-medium text-slate-700 tnum">{last}</span> of{' '}
+        <span className="font-medium text-slate-700 tnum">{total.toLocaleString()}</span> {noun}
       </p>
 
-      <div className="flex items-center gap-2">
-        <Button variant="secondary" onClick={() => onChange(page - 1)} disabled={page <= 1}>
+      <div className="flex items-center gap-1.5">
+        <Button size="sm" variant="secondary" onClick={() => onChange(page - 1)} disabled={page <= 1}>
+          <IconChevronLeft className="h-3.5 w-3.5" />
           Previous
         </Button>
-        <span className="text-sm text-slate-600">
-          Page {page} of {totalPages}
+        <span className="px-1.5 text-[12px] text-slate-500 tnum">
+          {page} / {totalPages}
         </span>
-        <Button variant="secondary" onClick={() => onChange(page + 1)} disabled={page >= totalPages}>
+        <Button size="sm" variant="secondary" onClick={() => onChange(page + 1)} disabled={page >= totalPages}>
           Next
+          <IconChevronRight className="h-3.5 w-3.5" />
         </Button>
       </div>
     </div>

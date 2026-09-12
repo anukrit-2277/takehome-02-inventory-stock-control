@@ -7,10 +7,13 @@ import { useAlerts } from '../context/AlertsContext.jsx';
 import { useFetch } from '../hooks/useFetch.js';
 import { useDebounced } from '../hooks/useDebounced.js';
 import { useQueryParams } from '../hooks/useQueryParams.js';
-import { Badge, Button, Card, EmptyState, ErrorMessage, Input, Select } from '../components/ui.jsx';
+import { Badge, Button, Card, Checkbox, EmptyState, ErrorMessage, Input, Select } from '../components/ui.jsx';
+import { PageHeader } from '../components/Layout.jsx';
+import { SortableTh, TableShell, Td, Th, Tr } from '../components/DataTable.jsx';
 import { Pagination } from '../components/Pagination.jsx';
 import { Spinner } from '../components/Spinner.jsx';
 import { ItemFormModal } from '../components/ItemFormModal.jsx';
+import { IconPackage, IconPlus, IconSearch } from '../components/Icons.jsx';
 
 // Also the shape of the URL: anything left at its default is not in the query
 // string, so a plain /items link stays clean.
@@ -26,14 +29,12 @@ const DEFAULTS = {
   pageSize: '25',
 };
 
-const COLUMNS = [
-  { key: 'sku', label: 'SKU', sortable: true },
-  { key: 'name', label: 'Name', sortable: true },
-  { key: 'category', label: 'Category' },
-  { key: 'onHand', label: 'On hand', sortable: true, numeric: true },
-  { key: 'reorderLevel', label: 'Reorder level', sortable: true, numeric: true },
-  { key: 'status', label: '' },
-];
+/** Three states, three colours — the semantic set, never used for anything else. */
+function stockTone(item) {
+  if (item.totalOnHand === 0) return { tone: 'red', label: 'Out of stock' };
+  if (item.belowReorderLevel) return { tone: 'amber', label: 'Low stock' };
+  return { tone: 'green', label: 'In stock' };
+}
 
 export function Items() {
   const { isManager } = useAuth();
@@ -89,77 +90,61 @@ export function Items() {
     update({ sort: column, direction, page: '1' });
   }
 
-  function setFilter(changes) {
-    update({ ...changes, page: '1' });
-  }
+  const setFilter = (changes) => update({ ...changes, page: '1' });
 
   const filtersApplied =
     values.search || values.categoryId || values.locationId ||
     values.belowReorder === 'true' || values.archived !== 'active';
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-lg font-semibold text-slate-900">Items</h1>
-          <p className="flex items-center gap-2 text-sm text-slate-500">
-            {data ? `${data.total} matching ${data.total === 1 ? 'item' : 'items'}` : 'Loading…'}
-            {/* Rows stay on screen while a new page loads, so say so rather
-                than showing stale numbers as if they were current. */}
-            {loading && data && <Spinner className="h-3.5 w-3.5" />}
-          </p>
-        </div>
-        {isManager && <Button onClick={() => setFormOpen(true)}>New item</Button>}
-      </div>
+    <div>
+      <PageHeader
+        title="Items"
+        description={data ? `${data.total.toLocaleString()} matching ${data.total === 1 ? 'item' : 'items'}` : 'Loading…'}
+      >
+        {loading && data && <Spinner className="h-3.5 w-3.5" />}
+        {isManager && (
+          <Button onClick={() => setFormOpen(true)}>
+            <IconPlus className="h-4 w-4" />
+            New item
+          </Button>
+        )}
+      </PageHeader>
 
-      <Card className="p-4">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Input
-            type="search"
-            placeholder="Search name or SKU…"
-            value={searchInput}
-            onChange={(e) => onSearchChange(e.target.value)}
-            aria-label="Search items"
-          />
+      <Card className="mb-3 p-3">
+        <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="relative">
+            <IconSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Input
+              type="search"
+              placeholder="Search name or SKU…"
+              value={searchInput}
+              onChange={(e) => onSearchChange(e.target.value)}
+              aria-label="Search items"
+              className="pl-9"
+            />
+          </div>
 
-          <Select
-            value={values.categoryId}
-            onChange={(e) => setFilter({ categoryId: e.target.value })}
-            aria-label="Filter by category"
-          >
+          <Select value={values.categoryId} onChange={(e) => setFilter({ categoryId: e.target.value })} aria-label="Filter by category">
             <option value="">All categories</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
+            {categories.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
           </Select>
 
-          <Select
-            value={values.locationId}
-            onChange={(e) => setFilter({ locationId: e.target.value })}
-            aria-label="Filter by location"
-          >
+          <Select value={values.locationId} onChange={(e) => setFilter({ locationId: e.target.value })} aria-label="Filter by location">
             <option value="">All locations</option>
-            {locations.map((l) => (
-              <option key={l.id} value={l.id}>{l.code} — {l.name}</option>
-            ))}
+            {locations.map((l) => (<option key={l.id} value={l.id}>{l.code} — {l.name}</option>))}
           </Select>
 
-          <Select
-            value={values.archived}
-            onChange={(e) => setFilter({ archived: e.target.value })}
-            aria-label="Filter by archived status"
-          >
+          <Select value={values.archived} onChange={(e) => setFilter({ archived: e.target.value })} aria-label="Filter by archived status">
             <option value="active">Active only</option>
             <option value="archived">Archived only</option>
             <option value="all">Active and archived</option>
           </Select>
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-4">
-          <label className="flex items-center gap-2 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-slate-100 pt-2.5">
+          <label className="flex cursor-pointer select-none items-center gap-2 text-[13px] text-slate-700">
+            <Checkbox
               checked={values.belowReorder === 'true'}
               onChange={(e) => setFilter({ belowReorder: e.target.checked ? 'true' : '' })}
             />
@@ -167,17 +152,11 @@ export function Items() {
           </label>
 
           {values.locationId && (
-            <span className="text-xs text-slate-500">
-              On hand shows stock at the selected location only
-            </span>
+            <span className="text-[11px] text-slate-400">On hand shows stock at the selected location only</span>
           )}
 
           {filtersApplied && (
-            <Button
-              variant="ghost"
-              className="ml-auto"
-              onClick={() => update(DEFAULTS)}
-            >
+            <Button size="sm" variant="ghost" className="ml-auto" onClick={() => update(DEFAULTS)}>
               Clear filters
             </Button>
           )}
@@ -185,99 +164,63 @@ export function Items() {
       </Card>
 
       <Card className="overflow-hidden">
-        <ErrorMessage error={error} className="m-4" />
+        <ErrorMessage error={error} className="m-3" />
 
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-200 text-sm">
-            <thead className="bg-slate-50">
-              <tr>
-                {COLUMNS.map((column) => (
-                  <th
-                    key={column.key}
-                    scope="col"
-                    className={`px-4 py-2.5 font-medium text-slate-600 ${column.numeric ? 'text-right' : 'text-left'}`}
-                  >
-                    {column.sortable ? (
-                      <button
-                        type="button"
-                        onClick={() => sortBy(column.key)}
-                        className="inline-flex items-center gap-1 hover:text-slate-900"
-                      >
-                        {column.label}
-                        <span className="text-xs text-slate-400">
-                          {values.sort === column.key ? (values.direction === 'asc' ? '▲' : '▼') : '↕'}
-                        </span>
-                      </button>
-                    ) : (
-                      column.label
-                    )}
-                  </th>
-                ))}
-              </tr>
-            </thead>
+        <TableShell>
+          <thead>
+            <tr>
+              <SortableTh label="SKU" column="sku" sort={values.sort} direction={values.direction} onSort={sortBy} />
+              <SortableTh label="Name" column="name" sort={values.sort} direction={values.direction} onSort={sortBy} />
+              <Th>Category</Th>
+              <SortableTh label="On hand" column="onHand" sort={values.sort} direction={values.direction} onSort={sortBy} align="right" />
+              <SortableTh label="Reorder" column="reorderLevel" sort={values.sort} direction={values.direction} onSort={sortBy} align="right" />
+              <Th align="right">Status</Th>
+            </tr>
+          </thead>
 
-            <tbody
-              className={`divide-y divide-slate-100 transition-opacity ${loading && data ? 'opacity-40' : ''}`}
-            >
-              {loading && !data && (
-                <tr>
-                  <td colSpan={COLUMNS.length} className="px-4 py-10 text-center">
-                    <Spinner />
-                  </td>
-                </tr>
-              )}
+          <tbody className={`transition-opacity ${loading && data ? 'opacity-40' : ''}`}>
+            {loading && !data && (
+              <tr><td colSpan={6} className="px-4 py-12 text-center"><Spinner /></td></tr>
+            )}
 
-              {data?.data.map((item) => (
-                <tr key={item.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-2.5 font-mono text-xs text-slate-600">
-                    <Link to={`/items/${item.id}`} className="text-brand-600 hover:underline">
-                      {item.sku}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <Link to={`/items/${item.id}`} className="font-medium text-slate-900 hover:underline">
+            {data?.data.map((item) => {
+              const status = stockTone(item);
+              return (
+                <Tr key={item.id}>
+                  <Td className="whitespace-nowrap font-mono text-[12px] text-slate-500">
+                    <Link to={`/items/${item.id}`} className="transition hover:text-brand-600">{item.sku}</Link>
+                  </Td>
+                  <Td className="min-w-52 max-w-80">
+                    <Link to={`/items/${item.id}`} className="block truncate font-medium text-slate-900 transition hover:text-brand-600">
                       {item.name}
                     </Link>
-                    <span className="block text-xs text-slate-500">per {item.unitOfMeasure}</span>
-                  </td>
-                  <td className="px-4 py-2.5 text-slate-600">{item.category.name}</td>
-                  <td className="px-4 py-2.5 text-right font-medium tabular-nums text-slate-900">
-                    {item.onHand}
-                  </td>
-                  <td className="px-4 py-2.5 text-right tabular-nums text-slate-600">
-                    {item.reorderLevel}
-                  </td>
-                  <td className="px-4 py-2.5">
+                    <span className="-mt-0.5 block text-[11px] leading-tight text-slate-400">per {item.unitOfMeasure}</span>
+                  </Td>
+                  <Td className="whitespace-nowrap"><Badge tone="neutral">{item.category.name}</Badge></Td>
+                  <Td align="right" className="whitespace-nowrap font-semibold text-slate-900 tnum">{item.onHand.toLocaleString()}</Td>
+                  <Td align="right" className="whitespace-nowrap text-slate-500 tnum">{item.reorderLevel.toLocaleString()}</Td>
+                  <Td align="right">
                     <div className="flex justify-end gap-1.5">
                       {item.archivedAt && <Badge tone="slate">Archived</Badge>}
-                      {item.belowReorderLevel && <Badge tone="red">Low stock</Badge>}
+                      <Badge tone={status.tone} dot>{status.label}</Badge>
                     </div>
-                  </td>
-                </tr>
-              ))}
+                  </Td>
+                </Tr>
+              );
+            })}
 
-              {data?.data.length === 0 && (
-                <tr>
-                  <td colSpan={COLUMNS.length}>
-                    <EmptyState title="No items match these filters">
-                      Try a different search, or clear the filters.
-                    </EmptyState>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+            {data?.data.length === 0 && (
+              <tr><td colSpan={6}>
+                <EmptyState title="No items match these filters" icon={IconPackage}>
+                  Try a different search, or clear the filters.
+                </EmptyState>
+              </td></tr>
+            )}
+          </tbody>
+        </TableShell>
 
         {data && (
-          <Pagination
-            page={data.page}
-            pageSize={data.pageSize}
-            total={data.total}
-            totalPages={data.totalPages}
-            noun="items"
-            onChange={(page) => update({ page: String(page) })}
-          />
+          <Pagination {...data} noun="items" onChange={(page) => update({ page: String(page) })} />
         )}
       </Card>
 

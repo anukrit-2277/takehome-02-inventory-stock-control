@@ -7,29 +7,27 @@
  * hovering.
  */
 export function BarList({ rows, emptyText = 'Nothing to show yet' }) {
-  if (rows.length === 0) return <p className="py-6 text-sm text-slate-500">{emptyText}</p>;
+  if (rows.length === 0) return <p className="py-6 text-[13px] text-slate-500">{emptyText}</p>;
 
   const max = Math.max(1, ...rows.map((row) => row.value));
 
   return (
-    <ul className="mt-3 space-y-3">
+    <ul className="space-y-3.5">
       {rows.map((row) => (
-        <li key={row.key}>
-          <div className="flex items-baseline justify-between gap-3 text-sm">
-            <span className="truncate text-slate-700">
-              {row.label}
-              {row.note && <span className="ml-1.5 text-xs text-slate-400">{row.note}</span>}
+        <li key={row.key} className="group">
+          <div className="flex items-baseline justify-between gap-3 text-[13px]">
+            <span className="flex min-w-0 items-baseline gap-2">
+              <span className="truncate font-medium text-slate-700">{row.label}</span>
+              {row.note && <span className="shrink-0 text-[11px] text-slate-400">{row.note}</span>}
             </span>
-            <span className="shrink-0 font-medium tabular-nums text-slate-900">
-              {row.value.toLocaleString()}
-            </span>
+            <span className="shrink-0 font-semibold text-slate-900 tnum">{row.value.toLocaleString()}</span>
           </div>
-          {/* Thin mark, square where it starts, 4px rounded at the data end. */}
-          <div className="mt-1 h-2 w-full rounded-r-[4px] bg-slate-100">
+          {/* Thin mark, square where it starts, rounded at the data end. */}
+          <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
             <div
-              className="h-2 rounded-r-[4px]"
+              className="h-1.5 rounded-full transition-[width] duration-500 ease-out"
               style={{
-                width: `${Math.max((row.value / max) * 100, row.value > 0 ? 1.5 : 0)}%`,
+                width: `${Math.max((row.value / max) * 100, row.value > 0 ? 2 : 0)}%`,
                 backgroundColor: 'var(--series-1)',
               }}
             />

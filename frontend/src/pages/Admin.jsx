@@ -3,9 +3,12 @@ import { useState } from 'react';
 import { categories as categoriesApi, locations as locationsApi, users as usersApi } from '../api/endpoints.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useFetch } from '../hooks/useFetch.js';
-import { Badge, Button, Card, ErrorMessage, Field, Input, Select } from '../components/ui.jsx';
+import { Badge, Button, Card, Checkbox, ErrorMessage, Field, Input, PanelHeader, Select } from '../components/ui.jsx';
+import { PageHeader } from '../components/Layout.jsx';
+import { IconPlus } from '../components/Icons.jsx';
 import { Spinner } from '../components/Spinner.jsx';
 import { Modal } from '../components/Modal.jsx';
+import { ConfirmDialog, PromptDialog } from '../components/Dialogs.jsx';
 
 const TABS = [
   ['categories', 'Categories'],
@@ -17,22 +20,22 @@ export function Admin() {
   const [tab, setTab] = useState('categories');
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-lg font-semibold text-slate-900">Admin</h1>
-        <p className="text-sm text-slate-500">
-          Categories, locations, and who is allowed to record movements where
-        </p>
-      </div>
+    <div>
+      <PageHeader
+        title="Admin"
+        description="Categories, locations, and who is allowed to record movements where"
+      />
 
-      <div className="flex gap-1 border-b border-slate-200">
+      <div className="mb-4 flex gap-6 border-b border-slate-200">
         {TABS.map(([key, label]) => (
           <button
             key={key}
             type="button"
             onClick={() => setTab(key)}
-            className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${
-              tab === key ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:text-slate-800'
+            className={`-mb-px border-b-2 py-2.5 text-[13px] font-medium transition ${
+              tab === key
+                ? 'border-brand-600 text-slate-900'
+                : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-800'
             }`}
           >
             {label}
@@ -56,7 +59,7 @@ export function Admin() {
  * it only once there is data.
  */
 function Panel({ state, children }) {
-  if (state.loading && !state.data) return <Card className="p-10 text-center"><Spinner /></Card>;
+  if (state.loading && !state.data) return <Card className="p-12 text-center"><Spinner /></Card>;
   if (state.error) return <ErrorMessage error={state.error} />;
   return children(state.data);
 }
@@ -66,6 +69,9 @@ function Categories() {
   const [name, setName] = useState('');
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  // The category each dialog is acting on, or null when it is closed.
+  const [renaming, setRenaming] = useState(null);
+  const [deleting, setDeleting] = useState(null);
 
   const run = async (fn) => {
     setError(null);
@@ -77,46 +83,80 @@ function Categories() {
     <Panel state={state}>
       {(data) => (
       <div className="space-y-4">
-        <Card className="p-4">
+        <Card>
+          <PanelHeader title="Add a category" description="Items must belong to one of these" />
           <form
-            className="flex flex-wrap items-end gap-2"
+            className="flex flex-wrap items-end gap-2 p-4"
             onSubmit={(e) => { e.preventDefault(); run(async () => { await categoriesApi.create({ name }); setName(''); }); }}
           >
-            <div className="flex-1 min-w-56">
+            <div className="min-w-56 flex-1">
               <Field label="New category">
                 <Input value={name} onChange={(e) => setName(e.target.value)} required maxLength={80} placeholder="e.g. Plumbing" />
               </Field>
             </div>
-            <Button type="submit" disabled={busy || !name.trim()}>Add category</Button>
+            <Button type="submit" disabled={busy || !name.trim()}>
+              <IconPlus className="h-4 w-4" />
+              Add category
+            </Button>
+            <ErrorMessage error={error} className="w-full" />
           </form>
-          <ErrorMessage error={error} className="mt-3" />
         </Card>
 
         <Card className="overflow-hidden">
           <ul className="divide-y divide-slate-100">
             {data.categories.map((category) => (
-              <li key={category.id} className="flex items-center gap-3 px-4 py-3 text-sm">
+              <li key={category.id} className="flex items-center gap-3 px-4 py-2.5 text-[13px] transition-colors hover:bg-slate-50">
                 <span className="flex-1 font-medium text-slate-900">{category.name}</span>
-                <span className="text-slate-500">{category._count.items} item{category._count.items === 1 ? '' : 's'}</span>
-                <Button
-                  variant="ghost"
-                  disabled={busy}
-                  onClick={() => {
-                    const next = window.prompt('Rename category', category.name);
-                    if (next && next !== category.name) run(() => categoriesApi.update(category.id, { name: next }));
-                  }}
-                >
+                <Badge tone="neutral">{category._count.items} item{category._count.items === 1 ? '' : 's'}</Badge>
+                <Button size="sm" variant="ghost" disabled={busy} onClick={() => setRenaming(category)}>
                   Rename
                 </Button>
                 {/* The server refuses to delete a category still in use, and
-                    says how many items are blocking it. */}
-                <Button variant="ghost" disabled={busy} onClick={() => run(() => categoriesApi.remove(category.id))}>
+                    says how many items are blocking it — the dialog stays open
+                    to show that reason. */}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={busy}
+                  className="hover:bg-rose-50 hover:text-rose-700"
+                  onClick={() => setDeleting(category)}
+                >
                   Delete
                 </Button>
               </li>
             ))}
           </ul>
         </Card>
+
+        {renaming && (
+        <PromptDialog
+          open
+          title="Rename category"
+          label="Category name"
+          initialValue={renaming.name}
+          maxLength={80}
+          confirmLabel="Rename"
+          onClose={() => setRenaming(null)}
+          onConfirm={async (next) => {
+            await categoriesApi.update(renaming.id, { name: next });
+            state.reload();
+          }}
+        />
+        )}
+
+        {deleting && (
+        <ConfirmDialog
+          open
+          title="Delete category"
+          description={`Delete "${deleting.name}"? This cannot be undone. A category still used by any item cannot be deleted.`}
+          confirmLabel="Delete category"
+          onClose={() => setDeleting(null)}
+          onConfirm={async () => {
+            await categoriesApi.remove(deleting.id);
+            state.reload();
+          }}
+        />
+        )}
       </div>
       )}
     </Panel>
@@ -139,9 +179,10 @@ function Locations() {
     <Panel state={state}>
       {(data) => (
       <div className="space-y-4">
-        <Card className="p-4">
+        <Card>
+          <PanelHeader title="Add a location" description="Locations are never deleted, only deactivated" />
           <form
-            className="flex flex-wrap items-end gap-2"
+            className="flex flex-wrap items-end gap-2 p-4"
             onSubmit={(e) => { e.preventDefault(); run(async () => { await locationsApi.create(form); setForm({ code: '', name: '' }); }); }}
           >
             <div className="w-40">
@@ -150,19 +191,23 @@ function Locations() {
             <div className="flex-1 min-w-56">
               <Field label="Name"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required maxLength={120} placeholder="Project Site B" /></Field>
             </div>
-            <Button type="submit" disabled={busy}>Add location</Button>
+            <Button type="submit" disabled={busy}>
+              <IconPlus className="h-4 w-4" />
+              Add location
+            </Button>
+            <ErrorMessage error={error} className="w-full" />
           </form>
-          <ErrorMessage error={error} className="mt-3" />
         </Card>
 
         <Card className="overflow-hidden">
           <ul className="divide-y divide-slate-100">
             {data.locations.map((location) => (
-              <li key={location.id} className="flex items-center gap-3 px-4 py-3 text-sm">
-                <span className="w-28 font-mono text-xs text-slate-600">{location.code}</span>
-                <span className="flex-1 text-slate-900">{location.name}</span>
-                {location.isActive ? <Badge tone="green">Active</Badge> : <Badge tone="slate">Inactive</Badge>}
+              <li key={location.id} className="flex items-center gap-3 px-4 py-2.5 text-[13px] transition-colors hover:bg-slate-50">
+                <span className="w-28 font-mono text-[12px] text-slate-500">{location.code}</span>
+                <span className="flex-1 font-medium text-slate-900">{location.name}</span>
+                {location.isActive ? <Badge tone="green" dot>Active</Badge> : <Badge tone="slate" dot>Inactive</Badge>}
                 <Button
+                  size="sm"
                   variant="ghost"
                   disabled={busy}
                   onClick={() => run(() => locationsApi.update(location.id, { isActive: !location.isActive }))}
@@ -172,7 +217,7 @@ function Locations() {
               </li>
             ))}
           </ul>
-          <p className="border-t border-slate-100 px-4 py-3 text-xs text-slate-500">
+          <p className="border-t border-slate-100 bg-slate-50/60 px-4 py-2.5 text-[12px] text-slate-500">
             Locations are never deleted — they appear in movements that must keep their meaning.
             A deactivated location takes no new stock but can still be emptied.
           </p>
@@ -203,17 +248,23 @@ function Users() {
       {(data) => (
       <div className="space-y-4">
         <div className="flex justify-end">
-          <Button onClick={() => setCreating(true)}>Add person</Button>
+          <Button onClick={() => setCreating(true)}>
+            <IconPlus className="h-4 w-4" />
+            Add person
+          </Button>
         </div>
         <ErrorMessage error={error} />
 
         <Card className="overflow-hidden">
           <ul className="divide-y divide-slate-100">
             {data.users.map((person) => (
-              <li key={person.id} className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm">
+              <li key={person.id} className="flex flex-wrap items-center gap-3 px-4 py-2.5 text-[13px] transition-colors hover:bg-slate-50">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-800 text-[11px] font-semibold text-white">
+                  {person.name.split(' ').map((part) => part[0]).slice(0, 2).join('')}
+                </span>
                 <span className="min-w-40">
                   <span className="font-medium text-slate-900">{person.name}</span>
-                  <span className="block text-xs text-slate-500">{person.email}</span>
+                  <span className="block text-[11px] text-slate-500">{person.email}</span>
                 </span>
 
                 <Badge tone={person.role === 'MANAGER' ? 'blue' : 'slate'}>
@@ -221,7 +272,7 @@ function Users() {
                 </Badge>
                 {!person.isActive && <Badge tone="red">Deactivated</Badge>}
 
-                <span className="flex-1 text-xs text-slate-600">
+                <span className="flex-1 font-mono text-[11px] text-slate-500">
                   {person.role === 'MANAGER'
                     ? 'Acts at every location'
                     : person.locations.length > 0
@@ -230,7 +281,7 @@ function Users() {
                 </span>
 
                 {person.role !== 'MANAGER' && (
-                  <Button variant="ghost" disabled={busy} onClick={() => setAssigning(person)}>Locations</Button>
+                  <Button size="sm" variant="secondary" disabled={busy} onClick={() => setAssigning(person)}>Locations</Button>
                 )}
 
                 {/* A manager cannot change their own role or active flag — the
@@ -238,6 +289,7 @@ function Users() {
                 {person.id !== me.id && (
                   <>
                     <Button
+                      size="sm"
                       variant="ghost"
                       disabled={busy}
                       onClick={() => run(() => usersApi.update(person.id, { role: person.role === 'MANAGER' ? 'STAFF' : 'MANAGER' }))}
@@ -245,6 +297,7 @@ function Users() {
                       Make {person.role === 'MANAGER' ? 'staff' : 'manager'}
                     </Button>
                     <Button
+                      size="sm"
                       variant="ghost"
                       disabled={busy}
                       onClick={() => run(() => usersApi.update(person.id, { isActive: !person.isActive }))}
@@ -309,8 +362,8 @@ function NewUserModal({ open, onClose, onSaved }) {
           </Select>
         </Field>
         <ErrorMessage error={error} />
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+        <div className="-mx-5 -mb-4 mt-5 flex justify-end gap-2 border-t border-slate-200/80 bg-slate-50/60 px-5 py-3">
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
           <Button type="submit" disabled={saving}>{saving ? 'Adding…' : 'Add person'}</Button>
         </div>
       </form>
@@ -352,22 +405,17 @@ function AssignmentsModal({ person, locations, onClose, onSaved }) {
 
   return (
     <Modal open title={`Locations for ${person.name}`} onClose={onClose}>
-      <p className="text-sm text-slate-600">
+      <p className="text-[13px] text-slate-600">
         {person.name} can record movements only at the locations ticked here.
       </p>
 
-      <ul className="mt-3 space-y-2">
+      <ul className="mt-3 space-y-1">
         {locations.map((location) => (
           <li key={location.id}>
-            <label className="flex items-center gap-2 text-sm text-slate-800">
-              <input
-                type="checkbox"
-                className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-                checked={selected.includes(location.id)}
-                onChange={() => toggle(location.id)}
-              />
-              <span className="font-mono text-xs text-slate-600">{location.code}</span>
-              <span>{location.name}</span>
+            <label className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 text-[13px] text-slate-800 transition hover:bg-slate-50">
+              <Checkbox checked={selected.includes(location.id)} onChange={() => toggle(location.id)} />
+              <span className="font-mono text-[11px] text-slate-500">{location.code}</span>
+              <span className="font-medium">{location.name}</span>
               {!location.isActive && <Badge tone="slate">Inactive</Badge>}
             </label>
           </li>
@@ -376,8 +424,8 @@ function AssignmentsModal({ person, locations, onClose, onSaved }) {
 
       <ErrorMessage error={error} className="mt-3" />
 
-      <div className="mt-4 flex justify-end gap-2">
-        <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+      <div className="-mx-5 -mb-4 mt-5 flex justify-end gap-2 border-t border-slate-200/80 bg-slate-50/60 px-5 py-3">
+        <Button variant="secondary" onClick={onClose}>Cancel</Button>
         <Button onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save assignments'}</Button>
       </div>
     </Modal>

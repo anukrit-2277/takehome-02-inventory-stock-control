@@ -6,9 +6,12 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useAlerts } from '../context/AlertsContext.jsx';
 import { useFetch } from '../hooks/useFetch.js';
 import { formatDateTime } from '../lib/format.js';
-import { Badge, Button, Card, EmptyState, ErrorMessage } from '../components/ui.jsx';
-import { Spinner } from '../components/Spinner.jsx';
+import { Badge, Button, Card, Checkbox, EmptyState, ErrorMessage } from '../components/ui.jsx';
+import { PageHeader } from '../components/Layout.jsx';
+import { TableShell, Td, Th, Tr } from '../components/DataTable.jsx';
 import { Pagination } from '../components/Pagination.jsx';
+import { Spinner } from '../components/Spinner.jsx';
+import { IconCheck } from '../components/Icons.jsx';
 
 export function Alerts() {
   const { isManager } = useAuth();
@@ -38,90 +41,85 @@ export function Alerts() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-lg font-semibold text-slate-900">Low stock alerts</h1>
-          <p className="text-sm text-slate-500">
-            Items whose total on hand, across every location, is at or below their reorder level
-          </p>
-        </div>
-        <label className="flex items-center gap-2 text-sm text-slate-700">
-          <input
-            type="checkbox"
-            className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+    <div>
+      <PageHeader
+        title="Low stock alerts"
+        description="Items whose total on hand, across every location, is at or below their reorder level"
+      >
+        <label className="flex cursor-pointer select-none items-center gap-2 text-[13px] text-slate-700">
+          <Checkbox
             checked={includeDismissed}
             onChange={(e) => { setIncludeDismissed(e.target.checked); setPage(1); }}
           />
           Include dismissed
         </label>
-      </div>
+      </PageHeader>
 
-      <ErrorMessage error={error} />
+      <ErrorMessage error={error} className="mb-3" />
 
       <Card className="overflow-hidden">
         {state.loading && !state.data ? (
-          <div className="py-12 text-center"><Spinner /></div>
+          <div className="py-14 text-center"><Spinner /></div>
         ) : state.data.total === 0 ? (
-          <EmptyState title="Nothing is running low">
+          <EmptyState title="Nothing is running low" icon={IconCheck}>
             Every active item is above its reorder level.
           </EmptyState>
         ) : (
           <>
-            <div className="overflow-x-auto">
-              <table className={`min-w-full divide-y divide-slate-200 text-sm ${state.loading ? 'opacity-40' : ''}`}>
-                <thead className="bg-slate-50 text-left text-slate-600">
-                  <tr>
-                    <th scope="col" className="px-4 py-2.5 font-medium">Item</th>
-                    <th scope="col" className="px-4 py-2.5 font-medium">Category</th>
-                    <th scope="col" className="px-4 py-2.5 text-right font-medium">On hand</th>
-                    <th scope="col" className="px-4 py-2.5 text-right font-medium">Reorder level</th>
-                    <th scope="col" className="px-4 py-2.5 text-right font-medium">Short by</th>
-                    <th scope="col" className="px-4 py-2.5" />
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {state.data.data.map((row) => (
-                    <tr key={row.id} className="hover:bg-slate-50">
-                      <td className="px-4 py-2.5">
-                        <Link to={`/items/${row.id}`} className="font-medium text-slate-900 hover:underline">
-                          {row.name}
-                        </Link>
-                        <span className="block font-mono text-xs text-slate-500">{row.sku}</span>
-                      </td>
-                      <td className="px-4 py-2.5 text-slate-600">{row.category}</td>
-                      <td className="px-4 py-2.5 text-right font-medium tabular-nums text-slate-900">{row.onHand}</td>
-                      <td className="px-4 py-2.5 text-right tabular-nums text-slate-600">{row.reorderLevel}</td>
-                      <td className="px-4 py-2.5 text-right tabular-nums text-red-600">{row.shortfall}</td>
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center justify-end gap-2">
-                          {row.dismissed && (
-                            <Badge tone="slate">
-                              Dismissed by {row.dismissed.by} · {formatDateTime(row.dismissed.at)}
-                            </Badge>
-                          )}
-                          {isManager && (
-                            <Button
-                              variant="secondary"
-                              disabled={busyId === row.id}
-                              onClick={() => act(row.id, Boolean(row.dismissed))}
-                            >
-                              {row.dismissed ? 'Restore alert' : 'Dismiss'}
-                            </Button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <Pagination {...state.data} onChange={setPage} noun="alerts" />
+            <TableShell>
+              <thead>
+                <tr>
+                  <Th>Item</Th>
+                  <Th>Category</Th>
+                  <Th align="right">On hand</Th>
+                  <Th align="right">Reorder</Th>
+                  <Th align="right">Short by</Th>
+                  <Th align="right" />
+                </tr>
+              </thead>
+              <tbody className={`transition-opacity ${state.loading ? 'opacity-40' : ''}`}>
+                {state.data.data.map((row) => (
+                  <Tr key={row.id}>
+                    <Td className="min-w-52 max-w-80">
+                      <Link to={`/items/${row.id}`} className="block truncate font-medium text-slate-900 transition hover:text-brand-600">
+                        {row.name}
+                      </Link>
+                      <span className="block font-mono text-[11px] text-slate-400">{row.sku}</span>
+                    </Td>
+                    <Td className="whitespace-nowrap"><Badge tone="neutral">{row.category}</Badge></Td>
+                    <Td align="right" className={`font-semibold tnum ${row.onHand === 0 ? 'text-rose-600' : 'text-slate-900'}`}>
+                      {row.onHand.toLocaleString()}
+                    </Td>
+                    <Td align="right" className="text-slate-500 tnum">{row.reorderLevel.toLocaleString()}</Td>
+                    <Td align="right">
+                      <Badge tone={row.onHand === 0 ? 'red' : 'amber'} dot>
+                        {row.shortfall.toLocaleString()} short
+                      </Badge>
+                    </Td>
+                    <Td align="right">
+                      <div className="flex items-center justify-end gap-2">
+                        {row.dismissed && (
+                          <span className="text-[11px] text-slate-400">
+                            Dismissed by {row.dismissed.by} · {formatDateTime(row.dismissed.at)}
+                          </span>
+                        )}
+                        {isManager && (
+                          <Button size="sm" variant="secondary" disabled={busyId === row.id} onClick={() => act(row.id, Boolean(row.dismissed))}>
+                            {row.dismissed ? 'Restore alert' : 'Dismiss'}
+                          </Button>
+                        )}
+                      </div>
+                    </Td>
+                  </Tr>
+                ))}
+              </tbody>
+            </TableShell>
+            <Pagination {...state.data} noun="alerts" onChange={setPage} />
           </>
         )}
       </Card>
 
-      <p className="text-xs text-slate-500">
+      <p className="mt-3 text-[12px] text-slate-500">
         Dismissing hides an alert until the item recovers. If its total rises above the reorder
         level and later falls back to it, the alert returns on its own.
       </p>
