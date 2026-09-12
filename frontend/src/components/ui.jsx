@@ -1,3 +1,5 @@
+import { cloneElement, useId } from 'react';
+
 /** Small shared pieces, so screens stay about behaviour rather than classes. */
 
 export function Button({ variant = 'primary', className = '', ...props }) {
@@ -19,14 +21,32 @@ export function Card({ className = '', ...props }) {
   return <div className={`rounded-lg bg-white ring-1 ring-slate-200 ${className}`} {...props} />;
 }
 
+/**
+ * A labelled control with an optional hint and error.
+ *
+ * The hint and error sit outside the <label> and are attached with
+ * aria-describedby instead. Nesting them inside would fold their text into the
+ * control's accessible name, so a select would announce as "Kind Receipt Issue
+ * Transfer Adjustment Stock arriving at a location" rather than just "Kind".
+ */
 export function Field({ label, error, hint, children }) {
+  const id = useId();
+  const hintId = `${id}-hint`;
+  const errorId = `${id}-error`;
+
+  const describedBy = [hint && !error ? hintId : null, error ? errorId : null]
+    .filter(Boolean)
+    .join(' ') || undefined;
+
   return (
-    <label className="block">
-      <span className="mb-1 block text-sm font-medium text-slate-700">{label}</span>
-      {children}
-      {hint && !error && <span className="mt-1 block text-xs text-slate-500">{hint}</span>}
-      {error && <span className="mt-1 block text-xs text-red-600">{error}</span>}
-    </label>
+    <div className="block">
+      <label htmlFor={id} className="mb-1 block text-sm font-medium text-slate-700">
+        {label}
+      </label>
+      {cloneElement(children, { id, 'aria-describedby': describedBy })}
+      {hint && !error && <span id={hintId} className="mt-1 block text-xs text-slate-500">{hint}</span>}
+      {error && <span id={errorId} className="mt-1 block text-xs text-red-600">{error}</span>}
+    </div>
   );
 }
 
