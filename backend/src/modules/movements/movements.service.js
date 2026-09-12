@@ -50,7 +50,7 @@ export async function recordMovement(input, actor) {
     const locations = await loadLocations(tx, lines);
 
     // Staff act only where they are assigned; a transfer is checked at both ends.
-    assertCanActAtLocations(actor, ...lines.map((line) => line.locationId));
+    assertCanActAtLocations(actor, [...locations.values()]);
 
     assertLocationsAcceptStock(lines, locations);
     await assertStockAvailable(tx, input.itemId, lines, locations);

@@ -1,0 +1,6 @@
+sku,location,quantity,date,note
+FST-1001,WH-MAIN,200,2026-09-01,Pallet 4471
+FST-1002,WH-MAIN,150,2026-09-01,Pallet 4471
+SAF-3002,RT-NORTH,60,2026-09-02,Weekly top-up
+ELE-4002,WH-MAIN,80,,
+CON-5001,RT-SOUTH,45,2026-09-03,Split delivery

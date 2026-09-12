@@ -1,0 +1,7 @@
+sku,name,description,unitOfMeasure,reorderLevel,category
+SMP-2001,Adjustable Spanner,250mm,each,10,Power Tools
+FST-1001,Duplicate Of An Existing SKU,,box,5,Fasteners
+SMP-2002,Unknown Category,,each,5,Plumbing
+SMP-2003,Reorder Level Is Not A Number,,each,many,Fasteners
+,Missing SKU,,each,5,Fasteners
+SMP-2004,Chalk Line Reel,30m,each,6,Consumables

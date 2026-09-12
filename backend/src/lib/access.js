@@ -7,12 +7,15 @@ export function canActAtLocation(user, locationId) {
 }
 
 /**
- * Throws unless the user may act at every location given. Nulls are ignored, so
- * callers can pass a movement's three location fields without filtering first.
+ * Throws unless the user may act at every location given, naming the ones they
+ * may not by code — a transfer is checked at both ends.
+ *
+ * Takes location records rather than ids so the message reads "RT-SOUTH"
+ * instead of "location 3", which matters in a CSV import report.
  */
-export function assertCanActAtLocations(user, ...locationIds) {
-  const denied = locationIds.filter((id) => id != null && !canActAtLocation(user, id));
+export function assertCanActAtLocations(user, locations) {
+  const denied = locations.filter((location) => !canActAtLocation(user, location.id));
   if (denied.length > 0) {
-    throw forbidden(`You are not assigned to location ${denied.join(', ')}`);
+    throw forbidden(`You are not assigned to ${denied.map((l) => l.code).join(', ')}`);
   }
 }
