@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import { categories as categoriesApi, items, locations as locationsApi, movements } from '../api/endpoints.js';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useAlerts } from '../context/AlertsContext.jsx';
 import { useFetch } from '../hooks/useFetch.js';
 import { formatDateTime, signed } from '../lib/format.js';
 import { Badge, Button, Card, EmptyState, ErrorMessage, Input } from '../components/ui.jsx';
@@ -16,6 +17,7 @@ const MOVEMENT_TONE = { RECEIPT: 'green', ISSUE: 'amber', TRANSFER: 'blue', ADJU
 export function ItemDetail() {
   const { id } = useParams();
   const { isManager } = useAuth();
+  const { refresh: refreshBadge } = useAlerts();
 
   const [tab, setTab] = useState('movements');
   const [movementPage, setMovementPage] = useState(1);
@@ -32,11 +34,20 @@ export function ItemDetail() {
   const { data: locationData } = useFetch(() => locationsApi.list(), []);
   const { data: categoryData } = useFetch(() => categoriesApi.list(), []);
 
+  // Going straight from one item to another reuses this component, so its
+  // paging and tab would otherwise carry over to an item they do not belong to.
+  useEffect(() => {
+    setMovementPage(1);
+    setTimelinePage(1);
+    setTab('movements');
+  }, [id]);
+
   /** A movement changes the item's stock, its history and its standing at once. */
   function reloadAfterMovement() {
     stock.reload();
     history.reload();
     item.reload();
+    refreshBadge();
   }
 
   async function toggleArchive() {
@@ -167,7 +178,7 @@ export function ItemDetail() {
         item={current}
         categories={categoryData?.categories ?? []}
         onClose={() => setEditing(false)}
-        onSaved={() => { item.reload(); timeline.reload(); stock.reload(); }}
+        onSaved={() => { item.reload(); timeline.reload(); stock.reload(); refreshBadge(); }}
       />
     </div>
   );

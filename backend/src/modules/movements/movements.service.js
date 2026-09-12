@@ -153,6 +153,9 @@ async function onHandAtLocation(tx, itemId, locationId) {
 }
 
 const movementInclude = {
+  // The item is included so a movement can stand on its own in the global list,
+  // where the reader has no item page for context.
+  item: { select: { id: true, sku: true, name: true } },
   recordedBy: { select: { id: true, name: true } },
   location: { select: { id: true, code: true, name: true } },
   sourceLocation: { select: { id: true, code: true, name: true } },

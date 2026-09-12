@@ -10,9 +10,21 @@ import { unauthorized } from '../../lib/errors.js';
 // password take the same amount of time and cannot be told apart.
 const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', 10);
 
+// Loaded wherever a user is about to be returned, so login and /auth/me hand
+// back the same shape. They disagreeing once meant the client had no
+// locationIds until its next full page load.
+const withAssignments = { assignments: { select: { locationId: true } } };
+
 /** Fields we are willing to send to the client. Never the password hash. */
 function publicUser(user) {
-  return { id: user.id, email: user.email, name: user.name, role: user.role };
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    // Always an array. Managers have none because they act everywhere.
+    locationIds: user.assignments?.map((a) => a.locationId) ?? [],
+  };
 }
 
 function signAccessToken(user) {
@@ -54,7 +66,7 @@ async function issueSession(user) {
 }
 
 export async function login(email, password) {
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = await prisma.user.findUnique({ where: { email }, include: withAssignments });
   const passwordMatches = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_HASH);
 
   // One message for every failure, so we never reveal which emails exist.
@@ -69,7 +81,7 @@ export async function refresh(token) {
 
   const stored = await prisma.refreshToken.findUnique({
     where: { tokenHash: hashToken(token) },
-    include: { user: true },
+    include: { user: { include: withAssignments } },
   });
   if (!stored) throw unauthorized('Invalid refresh token');
 

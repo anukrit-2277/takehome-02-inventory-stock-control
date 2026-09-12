@@ -2,7 +2,12 @@ import { cloneElement, useId } from 'react';
 
 /** Small shared pieces, so screens stay about behaviour rather than classes. */
 
-export function Button({ variant = 'primary', className = '', ...props }) {
+/**
+ * type defaults to "button", not the HTML default of "submit": a Cancel or
+ * Delete button placed inside a form would otherwise submit it. Every button
+ * that really does submit says so explicitly.
+ */
+export function Button({ variant = 'primary', type = 'button', className = '', ...props }) {
   const variants = {
     primary: 'bg-brand-600 text-white hover:bg-brand-700 disabled:bg-brand-600/50',
     secondary: 'bg-white text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50',
@@ -11,6 +16,7 @@ export function Button({ variant = 'primary', className = '', ...props }) {
   };
   return (
     <button
+      type={type}
       className={`inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${variants[variant]} ${className}`}
       {...props}
     />

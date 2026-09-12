@@ -22,9 +22,14 @@ export function MovementFormModal({ open, item, locations, onClose, onRecorded }
 
   // Staff may only record at the locations assigned to them, which the server
   // enforces; offering the rest would just invite a 403.
+  //
+  // Defaulted because this runs on every render, including while the dialog is
+  // closed: a user object missing locationIds would otherwise take the whole
+  // item page down rather than merely showing an empty list.
+  const assigned = user.locationIds ?? [];
   const allowed = useMemo(
-    () => (isManager ? locations : locations.filter((l) => user.locationIds.includes(l.id))),
-    [locations, isManager, user.locationIds],
+    () => (isManager ? locations : locations.filter((l) => assigned.includes(l.id))),
+    [locations, isManager, assigned],
   );
   // A retired location cannot take new stock, so it is only offered as a source.
   const canReceive = allowed.filter((l) => l.isActive);

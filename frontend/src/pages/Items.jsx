@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 
 import { categories as categoriesApi, items, locations as locationsApi } from '../api/endpoints.js';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useAlerts } from '../context/AlertsContext.jsx';
 import { useFetch } from '../hooks/useFetch.js';
 import { useDebounced } from '../hooks/useDebounced.js';
 import { useQueryParams } from '../hooks/useQueryParams.js';
@@ -36,6 +37,7 @@ const COLUMNS = [
 
 export function Items() {
   const { isManager } = useAuth();
+  const { refresh: refreshBadge } = useAlerts();
   const { values, update, key } = useQueryParams(DEFAULTS);
 
   // The box is local state so typing feels instant; the URL only catches up
@@ -283,7 +285,7 @@ export function Items() {
         open={formOpen}
         categories={categories}
         onClose={() => setFormOpen(false)}
-        onSaved={reload}
+        onSaved={() => { reload(); refreshBadge(); }}
       />
     </div>
   );

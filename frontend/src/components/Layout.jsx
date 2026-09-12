@@ -1,9 +1,9 @@
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext.jsx';
-import { useFetch } from '../hooks/useFetch.js';
-import { alerts } from '../api/endpoints.js';
+import { useAlerts } from '../context/AlertsContext.jsx';
 import { Button } from './ui.jsx';
+import { ErrorBoundary } from './ErrorBoundary.jsx';
 
 const NAV = [
   { to: '/', label: 'Dashboard', end: true },
@@ -16,10 +16,10 @@ const NAV = [
 
 export function Layout() {
   const { user, logout, isManager } = useAuth();
+  const location = useLocation();
 
-  // The count badge goal 10 asks for. pageSize=1 because only the total matters.
-  const { data: lowStock } = useFetch(() => alerts.lowStock({ pageSize: 1 }), []);
-  const alertCount = lowStock?.total ?? 0;
+  // The count badge goal 10 asks for, kept current by whichever screen changed it.
+  const { count: alertCount } = useAlerts();
 
   return (
     <div className="flex min-h-full flex-col">
@@ -66,7 +66,11 @@ export function Layout() {
       </header>
 
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6">
-        <Outlet />
+        {/* Keyed on the route so recovering from one page's error does not
+            immediately re-throw when the user navigates elsewhere. */}
+        <ErrorBoundary key={location.pathname}>
+          <Outlet />
+        </ErrorBoundary>
       </main>
     </div>
   );

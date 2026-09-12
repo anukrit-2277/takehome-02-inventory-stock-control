@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
 import { AuthProvider } from './context/AuthContext.jsx';
+import { AlertsProvider } from './context/AlertsContext.jsx';
 import { RequireAuth } from './components/RequireAuth.jsx';
 import { Layout } from './components/Layout.jsx';
 
@@ -23,7 +24,9 @@ export default function App() {
           <Route
             element={
               <RequireAuth>
-                <Layout />
+                <AlertsProvider>
+                  <Layout />
+                </AlertsProvider>
               </RequireAuth>
             }
           >

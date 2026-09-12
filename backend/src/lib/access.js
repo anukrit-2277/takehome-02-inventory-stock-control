@@ -3,7 +3,7 @@ import { forbidden } from './errors.js';
 /** Managers act everywhere. Staff act only at the locations assigned to them. */
 export function canActAtLocation(user, locationId) {
   if (user.role === 'MANAGER') return true;
-  return user.locationIds.includes(locationId);
+  return (user.locationIds ?? []).includes(locationId);
 }
 
 /**

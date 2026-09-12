@@ -37,12 +37,24 @@ async function send(path, { method = 'GET', body, isForm = false } = {}) {
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
   if (body && !isForm) headers['Content-Type'] = 'application/json';
 
-  return fetch(`${BASE_URL}/api${path}`, {
-    method,
-    headers,
-    credentials: 'include',
-    body: isForm ? body : body && JSON.stringify(body),
-  });
+  try {
+    return await fetch(`${BASE_URL}/api${path}`, {
+      method,
+      headers,
+      credentials: 'include',
+      body: isForm ? body : body && JSON.stringify(body),
+    });
+  } catch {
+    // fetch only rejects when the request never reached the server. The
+    // browser's own wording for this is "Failed to fetch", which tells a user
+    // nothing, so say what actually happened.
+    throw new ApiError(0, {
+      error: {
+        code: 'NETWORK_ERROR',
+        message: 'Could not reach the server. Check your connection and try again.',
+      },
+    });
+  }
 }
 
 // While one refresh is in flight, other 401s wait for it instead of each firing
