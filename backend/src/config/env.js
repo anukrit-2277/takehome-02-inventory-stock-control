@@ -1,5 +1,11 @@
 import 'dotenv/config';
 
+// Day and week boundaries have to mean the same thing in JavaScript as they do
+// in MySQL, which defaults to UTC. Pinning the process here removes the whole
+// class of off-by-one-day bugs that appear only when the server sits west of
+// UTC. Override with TZ if a deployment genuinely needs local time.
+process.env.TZ = process.env.TZ || 'UTC';
+
 function required(name) {
   const value = process.env[name];
   if (!value) throw new Error(`Missing required environment variable: ${name}`);

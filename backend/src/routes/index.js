@@ -9,6 +9,7 @@ import { itemRoutes } from '../modules/items/items.routes.js';
 import { movementRoutes } from '../modules/movements/movements.routes.js';
 import { importRoutes } from '../modules/imports/imports.routes.js';
 import { exportRoutes } from '../modules/exports/exports.routes.js';
+import { dashboardRoutes } from '../modules/dashboard/dashboard.routes.js';
 
 export const router = Router();
 
@@ -25,3 +26,4 @@ router.use('/items', itemRoutes);
 router.use('/movements', movementRoutes);
 router.use('/imports', importRoutes);
 router.use('/exports', exportRoutes);
+router.use('/dashboard', dashboardRoutes);
