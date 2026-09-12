@@ -8,6 +8,16 @@
   --color-brand-700: oklch(0.44 0.15 255);
 }
 
+/* Chart roles, kept as tokens so the charts are written against meaning rather
+   than raw hex. Slots 1 and 2 of the validated categorical palette: adjacent
+   colour-blind separation dE 24.7, normal-vision 33.6, both over 3:1 on white. */
+:root {
+  --series-1: #2a78d6;   /* receipts */
+  --series-2: #eb6834;   /* issues */
+  --chart-grid: #e2e8f0; /* one step off the surface, hairline */
+  --chart-surface: #ffffff;
+}
+
 html, body, #root {
   height: 100%;
 }
