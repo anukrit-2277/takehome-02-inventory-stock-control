@@ -6,11 +6,15 @@ import { resolveDismissalIfRecovered } from '../alerts/alerts.service.js';
 import { badRequest, conflict, notFound } from '../../lib/errors.js';
 
 // Changes to these fields are written to the item's timeline (goal 9).
-const TRACKED_FIELDS = ['sku', 'name', 'description', 'unitOfMeasure', 'reorderLevel', 'categoryId'];
+const TRACKED_FIELDS = ['sku', 'name', 'description', 'unitId', 'reorderLevel', 'categoryId'];
 
 const itemInclude = {
   category: { select: { id: true, name: true } },
+  unit: { select: { id: true, code: true } },
   createdBy: { select: { id: true, name: true } },
+  // Lets the edit form know whether the unit is still changeable, without a
+  // second request. Zero means the item has no ledger history yet.
+  _count: { select: { lines: true } },
 };
 
 const asText = (value) => (value === null || value === undefined ? null : String(value));
@@ -24,6 +28,7 @@ export async function getItem(id) {
 export async function createItem(data, actor) {
   return prisma.$transaction(async (tx) => {
     await assertCategoryExists(tx, data.categoryId);
+    await assertUnitExists(tx, data.unitId);
 
     const item = await tx.item.create({
       data: { ...data, createdById: actor.id },
@@ -41,6 +46,11 @@ export async function updateItem(id, data, actor) {
     const before = await tx.item.findUnique({ where: { id } });
     if (!before) throw notFound(`Item ${id} not found`);
     if (data.categoryId !== undefined) await assertCategoryExists(tx, data.categoryId);
+
+    if (data.unitId !== undefined && data.unitId !== before.unitId) {
+      await assertUnitExists(tx, data.unitId);
+      await assertUnitStillChangeable(tx, before);
+    }
 
     const after = await tx.item.update({ where: { id }, data, include: itemInclude });
     await recordFieldChanges(tx, before, after, actor);
@@ -100,6 +110,19 @@ async function recordFieldChanges(tx, before, after, actor) {
     actorId: actor.id,
   }));
 
+  // An id tells a reader nothing, so record the unit's code instead.
+  const unitChange = events.find((event) => event.field === 'unitId');
+  if (unitChange) {
+    const codes = await tx.unit.findMany({
+      where: { id: { in: [before.unitId, after.unitId] } },
+      select: { id: true, code: true },
+    });
+    const codeOf = (id) => codes.find((u) => u.id === id)?.code ?? String(id);
+    unitChange.field = 'unit';
+    unitChange.oldValue = codeOf(before.unitId);
+    unitChange.newValue = codeOf(after.unitId);
+  }
+
   // A category id tells a reader nothing, so record the names instead.
   const categoryChange = events.find((event) => event.field === 'categoryId');
   if (categoryChange) {
@@ -114,6 +137,30 @@ async function recordFieldChanges(tx, before, after, actor) {
   }
 
   if (events.length > 0) await tx.itemEvent.createMany({ data: events });
+}
+
+/**
+ * The unit of measure is the denominator of every number in an item's ledger:
+ * "142" only means something alongside "box". Once movements exist, changing it
+ * would silently reinterpret all of them without touching a row — the one way
+ * left to rewrite history that the append-only triggers do not cover.
+ *
+ * Before the first movement it is freely editable, so a typo caught immediately
+ * is just a typo.
+ */
+async function assertUnitStillChangeable(tx, item) {
+  const recorded = await tx.stockMovementLine.count({ where: { itemId: item.id } });
+  if (recorded > 0) {
+    throw conflict(
+      `${item.sku} has ${recorded} recorded movement(s) in its current unit, so the unit can no longer be changed. Create a separate item to stock it in a different unit.`,
+      { itemId: item.id, movements: recorded },
+    );
+  }
+}
+
+async function assertUnitExists(tx, unitId) {
+  const unit = await tx.unit.findUnique({ where: { id: unitId }, select: { id: true } });
+  if (!unit) throw badRequest(`Unit ${unitId} does not exist`);
 }
 
 async function assertCategoryExists(tx, categoryId) {
@@ -178,6 +225,7 @@ export async function listItems(params) {
   const from = Prisma.sql`
     FROM items i
     JOIN categories c ON c.id = i.categoryId
+    JOIN units u ON u.id = i.unitId
     LEFT JOIN (
       SELECT itemId, SUM(quantityDelta) AS qty FROM stock_movement_lines GROUP BY itemId
     ) total ON total.itemId = i.id
@@ -190,8 +238,9 @@ export async function listItems(params) {
 
   const [rows, counted] = await Promise.all([
     prisma.$queryRaw`
-      SELECT i.id, i.sku, i.name, i.description, i.unitOfMeasure, i.reorderLevel,
+      SELECT i.id, i.sku, i.name, i.description, i.reorderLevel,
              i.archivedAt, c.id AS categoryId, c.name AS categoryName,
+             u.id AS unitId, u.code AS unitCode,
              CAST(COALESCE(${onHand}, 0) AS SIGNED) AS onHand,
              CAST(COALESCE(total.qty, 0) AS SIGNED) AS totalOnHand
       ${from}
@@ -213,7 +262,7 @@ function presentRow(row) {
     sku: row.sku,
     name: row.name,
     description: row.description,
-    unitOfMeasure: row.unitOfMeasure,
+    unit: { id: row.unitId, code: row.unitCode },
     reorderLevel: row.reorderLevel,
     archivedAt: row.archivedAt,
     category: { id: row.categoryId, name: row.categoryName },

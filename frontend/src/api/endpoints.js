@@ -40,6 +40,13 @@ export const categories = {
   remove: (id) => api.delete(`/categories/${id}`),
 };
 
+export const units = {
+  list: () => api.get('/units'),
+  create: (data) => api.post('/units', data),
+  update: (id, data) => api.patch(`/units/${id}`, data),
+  remove: (id) => api.delete(`/units/${id}`),
+};
+
 export const locations = {
   list: () => api.get('/locations'),
   create: (data) => api.post('/locations', data),

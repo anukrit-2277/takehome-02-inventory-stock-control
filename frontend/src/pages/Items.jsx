@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
-import { categories as categoriesApi, items, locations as locationsApi } from '../api/endpoints.js';
+import { categories as categoriesApi, units as unitsApi, items, locations as locationsApi } from '../api/endpoints.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useAlerts } from '../context/AlertsContext.jsx';
 import { useFetch } from '../hooks/useFetch.js';
@@ -80,6 +80,7 @@ export function Items() {
   const { data, loading, error, reload } = useFetch(() => items.list(values), [key]);
   const { data: categoryData } = useFetch(() => categoriesApi.list(), []);
   const { data: locationData } = useFetch(() => locationsApi.list(), []);
+  const { data: unitData } = useFetch(() => unitsApi.list(), []);
 
   const [formOpen, setFormOpen] = useState(false);
   const categories = categoryData?.categories ?? [];
@@ -194,7 +195,7 @@ export function Items() {
                     <Link to={`/items/${item.id}`} className="block truncate font-medium text-slate-900 transition hover:text-brand-600">
                       {item.name}
                     </Link>
-                    <span className="-mt-0.5 block text-[11px] leading-tight text-slate-400">per {item.unitOfMeasure}</span>
+                    <span className="-mt-0.5 block text-[11px] leading-tight text-slate-400">per {item.unit.code}</span>
                   </Td>
                   <Td className="whitespace-nowrap"><Badge tone="neutral">{item.category.name}</Badge></Td>
                   <Td align="right" className="whitespace-nowrap font-semibold text-slate-900 tnum">{item.onHand.toLocaleString()}</Td>
@@ -227,6 +228,7 @@ export function Items() {
       <ItemFormModal
         open={formOpen}
         categories={categories}
+        units={unitData?.units ?? []}
         onClose={() => setFormOpen(false)}
         onSaved={() => { reload(); refreshBadge(); }}
       />

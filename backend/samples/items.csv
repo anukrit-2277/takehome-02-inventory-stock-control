@@ -1,4 +1,4 @@
-sku,name,description,unitOfMeasure,reorderLevel,category
+sku,name,description,unit,reorderLevel,category
 SMP-1001,Claw Hammer 16oz,Fibreglass handle,each,12,Power Tools
 SMP-1002,Masonry Drill Bit 8mm,Carbide tipped,each,20,Power Tools
 SMP-1003,Safety Goggles Clear,Anti-fog lens,each,25,Safety Gear

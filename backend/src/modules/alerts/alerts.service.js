@@ -28,6 +28,7 @@ export async function listLowStock({ includeDismissed = false, ...pagination }) 
   const from = Prisma.sql`
     FROM items i
     JOIN categories c ON c.id = i.categoryId
+    JOIN units u ON u.id = i.unitId
     LEFT JOIN (
       SELECT itemId, SUM(quantityDelta) AS qty FROM stock_movement_lines GROUP BY itemId
     ) total ON total.itemId = i.id
@@ -39,8 +40,8 @@ export async function listLowStock({ includeDismissed = false, ...pagination }) 
 
   const [rows, counted] = await Promise.all([
     prisma.$queryRaw`
-      SELECT i.id, i.sku, i.name, i.unitOfMeasure, i.reorderLevel,
-             c.name AS categoryName,
+      SELECT i.id, i.sku, i.name, i.reorderLevel,
+             c.name AS categoryName, u.code AS unitCode,
              CAST(COALESCE(total.qty, 0) AS SIGNED) AS onHand,
              d.id AS dismissalId, d.dismissedAt,
              (SELECT name FROM users WHERE id = d.dismissedById) AS dismissedByName
@@ -60,7 +61,7 @@ function present(row) {
     id: row.id,
     sku: row.sku,
     name: row.name,
-    unitOfMeasure: row.unitOfMeasure,
+    unitOfMeasure: row.unitCode,
     category: row.categoryName,
     onHand,
     reorderLevel: row.reorderLevel,

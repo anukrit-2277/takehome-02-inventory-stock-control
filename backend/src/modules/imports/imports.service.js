@@ -40,19 +40,30 @@ function parseRow(schema, row) {
 export async function importItems(buffer, actor) {
   const rows = parseCsv(buffer, ITEM_COLUMNS);
 
-  // Categories are a list managers maintain, so an unknown one is an error
-  // rather than something the import quietly creates (goal 2).
-  const categories = await prisma.category.findMany({ select: { id: true, name: true } });
+  // Categories and units are lists managers maintain, so an unknown value is an
+  // error rather than something the import quietly creates (goal 2). A
+  // spreadsheet cannot offer a dropdown, so this is where that list is enforced.
+  const [categories, units] = await Promise.all([
+    prisma.category.findMany({ select: { id: true, name: true } }),
+    prisma.unit.findMany({ select: { id: true, code: true } }),
+  ]);
   const categoryByName = new Map(categories.map((c) => [c.name.toLowerCase(), c.id]));
+  const unitByCode = new Map(units.map((u) => [u.code.toLowerCase(), u.id]));
 
   return importRows(rows, async (row) => {
-    const { category, ...data } = parseRow(itemRowSchema, row);
+    const { category, unit, ...data } = parseRow(itemRowSchema, row);
 
     const categoryId = categoryByName.get(category.toLowerCase());
     if (!categoryId) {
       throw badRequest(`Unknown category "${category}" — create it first`);
     }
-    await createItem({ ...data, categoryId }, actor);
+
+    const unitId = unitByCode.get(unit.toLowerCase());
+    if (!unitId) {
+      throw badRequest(`Unknown unit "${unit}" — create it first`);
+    }
+
+    await createItem({ ...data, categoryId, unitId }, actor);
   });
 }
 

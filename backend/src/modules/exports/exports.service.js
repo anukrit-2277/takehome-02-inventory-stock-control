@@ -19,7 +19,7 @@ export async function stockPositionCsv({ archived = 'active' } = {}) {
     prisma.item.findMany({
       where,
       orderBy: { sku: 'asc' },
-      include: { category: { select: { name: true } } },
+      include: { category: { select: { name: true } }, unit: { select: { code: true } } },
     }),
     prisma.location.findMany({ orderBy: { code: 'asc' } }),
     prisma.stockMovementLine.groupBy({
@@ -46,7 +46,7 @@ export async function stockPositionCsv({ archived = 'active' } = {}) {
     const total = quantities.reduce((sum, value) => sum + value, 0);
 
     return [
-      item.sku, item.name, item.category.name, item.unitOfMeasure, item.reorderLevel,
+      item.sku, item.name, item.category.name, item.unit.code, item.reorderLevel,
       ...quantities,
       total,
       total <= item.reorderLevel ? 'Yes' : 'No',

@@ -6,8 +6,15 @@ import { z } from 'zod';
 // A blank cell arrives as undefined, which would otherwise produce Zod's
 // "expected string, received undefined". These give the failure report a
 // sentence the person fixing the file can act on.
+// max() needs its own message: the schema-level `error` option applies to every
+// issue on the string, so without this a 250-character name reported
+// "Name is required", which is misleading rather than merely unhelpful.
 const required = (label, max) =>
-  z.string({ error: `${label} is required` }).trim().min(1, `${label} is required`).max(max);
+  z
+    .string({ error: `${label} is required` })
+    .trim()
+    .min(1, `${label} is required`)
+    .max(max, `${label} must be ${max} characters or fewer`);
 
 const wholeNumber = (label) =>
   z.coerce.number({ error: `${label} must be a whole number` }).int(`${label} must be a whole number`);
@@ -16,7 +23,7 @@ export const itemRowSchema = z.object({
   sku: required('SKU', 64).toUpperCase(),
   name: required('Name', 200),
   description: z.string().trim().max(2000).optional(),
-  unitOfMeasure: required('Unit of measure', 32),
+  unit: required('Unit of measure', 32),
   reorderLevel: wholeNumber('Reorder level').min(0, 'Reorder level cannot be negative'),
   category: required('Category', 80),
 });
@@ -38,9 +45,9 @@ export const ITEM_COLUMNS = {
   sku: 'sku',
   name: 'name',
   description: 'description',
-  unitofmeasure: 'unitOfMeasure',
-  unit: 'unitOfMeasure',
-  uom: 'unitOfMeasure',
+  unitofmeasure: 'unit',
+  unit: 'unit',
+  uom: 'unit',
   reorderlevel: 'reorderLevel',
   reorder: 'reorderLevel',
   category: 'category',

@@ -150,7 +150,7 @@ export function MovementFormModal({ open, item, locations, onClose, onRecorded }
           )}
 
           <Field
-            label={`Quantity${kind === 'ADJUSTMENT' ? '' : ` (${item.unitOfMeasure})`}`}
+            label={`Quantity${kind === 'ADJUSTMENT' ? '' : ` (${item.unit.code})`}`}
             hint={kind === 'ADJUSTMENT' ? 'Negative to reduce the count, positive to increase it' : undefined}
           >
             <Input

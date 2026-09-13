@@ -113,6 +113,19 @@ model LocationAssignment {
 // Catalogue
 // ---------------------------------------------------------------------------
 
+/// The units an item can be stocked in. A short list managers maintain, exactly
+/// like categories — so "each", "Each" and "ea" cannot coexist as three values.
+model Unit {
+  id        Int      @id @default(autoincrement())
+  code      String   @unique @db.VarChar(32)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items Item[]
+
+  @@map("units")
+}
+
 model Category {
   id        Int      @id @default(autoincrement())
   name      String   @unique @db.VarChar(80)
@@ -125,19 +138,19 @@ model Category {
 }
 
 model Item {
-  id            Int       @id @default(autoincrement())
-  sku           String    @unique @db.VarChar(64)
-  name          String    @db.VarChar(200)
-  description   String?   @db.Text
-  unitOfMeasure String    @db.VarChar(32)
-  reorderLevel  Int       @default(0)
-  categoryId    Int
+  id           Int       @id @default(autoincrement())
+  sku          String    @unique @db.VarChar(64)
+  name         String    @db.VarChar(200)
+  description  String?   @db.Text
+  unitId       Int
+  reorderLevel Int       @default(0)
+  categoryId   Int
   // Archive is a soft state: archived items keep their full ledger and
   // timeline, but drop out of day-to-day lists and reject new movements.
-  archivedAt    DateTime?
-  createdById   Int?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  archivedAt   DateTime?
+  createdById  Int?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   category   Category            @relation(fields: [categoryId], references: [id])
   createdBy  User?               @relation(fields: [createdById], references: [id], onDelete: SetNull)
@@ -145,8 +158,10 @@ model Item {
   lines      StockMovementLine[]
   events     ItemEvent[]
   dismissals AlertDismissal[]
+  unit       Unit                @relation(fields: [unitId], references: [id])
 
   @@index([categoryId])
+  @@index([unitId])
   @@index([archivedAt])
   @@index([name])
   @@map("items")
@@ -175,14 +190,14 @@ model StockMovement {
   recordedById          Int
   occurredAt            DateTime     @default(now())
 
-  item Item @relation(fields: [itemId], references: [id])
+  item                Item                @relation(fields: [itemId], references: [id])
   // Restrict, not SetNull: a location that appears anywhere in the ledger can
   // never be deleted, because blanking it would silently rewrite history. It
   // also keeps these columns eligible for the CHECK constraint below, which
   // MySQL forbids on any column a foreign key may itself modify.
-  location            Location? @relation("MovementLocation", fields: [locationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  sourceLocation      Location? @relation("MovementSource", fields: [sourceLocationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  destinationLocation Location? @relation("MovementDestination", fields: [destinationLocationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  location            Location?           @relation("MovementLocation", fields: [locationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  sourceLocation      Location?           @relation("MovementSource", fields: [sourceLocationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  destinationLocation Location?           @relation("MovementDestination", fields: [destinationLocationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   recordedBy          User                @relation(fields: [recordedById], references: [id])
   lines               StockMovementLine[]
 

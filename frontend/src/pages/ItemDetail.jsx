@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
-import { categories as categoriesApi, items, locations as locationsApi, movements } from '../api/endpoints.js';
+import { categories as categoriesApi, units as unitsApi, items, locations as locationsApi, movements } from '../api/endpoints.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useAlerts } from '../context/AlertsContext.jsx';
 import { useFetch } from '../hooks/useFetch.js';
@@ -41,6 +41,7 @@ export function ItemDetail() {
   const timeline = useFetch(() => items.timeline(id, { page: timelinePage, pageSize: 10 }), [id, timelinePage]);
   const { data: locationData } = useFetch(() => locationsApi.list(), []);
   const { data: categoryData } = useFetch(() => categoriesApi.list(), []);
+  const { data: unitData } = useFetch(() => unitsApi.list(), []);
 
   // Going straight from one item to another reuses this component, so its
   // paging and tab would otherwise carry over to an item they do not belong to.
@@ -146,7 +147,7 @@ export function ItemDetail() {
             ) : (
               <span className={`mt-1 text-[28px] font-semibold leading-none tracking-tight ${critical ? 'text-rose-600' : low ? 'text-amber-600' : 'text-slate-900'}`}>
                 {total.toLocaleString()}
-                <span className="ml-1.5 text-[12px] font-normal text-slate-400">{current.unitOfMeasure}</span>
+                <span className="ml-1.5 text-[12px] font-normal text-slate-400">{current.unit.code}</span>
               </span>
             )}
             <span className="mt-1.5 text-[11px] text-slate-400">Reorder at {current.reorderLevel.toLocaleString()}</span>
@@ -207,6 +208,7 @@ export function ItemDetail() {
         open={editing}
         item={current}
         categories={categoryData?.categories ?? []}
+        units={unitData?.units ?? []}
         onClose={() => setEditing(false)}
         onSaved={() => { item.reload(); timeline.reload(); stock.reload(); refreshBadge(); }}
       />

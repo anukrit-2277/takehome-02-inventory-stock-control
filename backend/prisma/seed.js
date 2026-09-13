@@ -32,6 +32,10 @@ const LOCATIONS = [
 
 const CATEGORIES = ['Fasteners', 'Power Tools', 'Safety Gear', 'Electrical', 'Consumables'];
 
+// The units items can be stocked in. A maintained list, like categories, so
+// "each", "Each" and "ea" cannot become three different units.
+const UNITS = ['each', 'box', 'pack', 'roll', 'can', 'metre'];
+
 // [sku, name, category, unit, reorderLevel, description]
 const ITEMS = [
   ['FST-1001', 'M8 Hex Bolt 40mm', 'Fasteners', 'box', 25, 'Zinc-plated, 100 per box.'],
@@ -92,13 +96,19 @@ async function main() {
   }
   console.log(`categories: ${Object.keys(categories).length}`);
 
+  const units = {};
+  for (const code of UNITS) {
+    units[code] = await prisma.unit.upsert({ where: { code }, update: {}, create: { code } });
+  }
+  console.log(`units:      ${Object.keys(units).length}`);
+
   const manager = users['manager@demo.test'];
 
-  for (const [sku, name, category, unitOfMeasure, reorderLevel, description] of ITEMS) {
+  for (const [sku, name, category, unit, reorderLevel, description] of ITEMS) {
     const data = {
       name,
       description,
-      unitOfMeasure,
+      unitId: units[unit].id,
       reorderLevel,
       categoryId: categories[category].id,
       createdById: manager.id,

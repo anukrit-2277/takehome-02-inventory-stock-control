@@ -22,7 +22,7 @@ export function DataTransfer() {
           <ImportCard
             title="Import items"
             description="Creates items in bulk. Categories must already exist."
-            columns="sku, name, description, unitOfMeasure, reorderLevel, category"
+            columns="sku, name, description, unit, reorderLevel, category"
             run={imports.items}
             noun="item"
           />

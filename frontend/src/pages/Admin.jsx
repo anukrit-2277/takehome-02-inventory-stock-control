@@ -1,6 +1,11 @@
 import { useState } from 'react';
 
-import { categories as categoriesApi, locations as locationsApi, users as usersApi } from '../api/endpoints.js';
+import {
+  categories as categoriesApi,
+  locations as locationsApi,
+  units as unitsApi,
+  users as usersApi,
+} from '../api/endpoints.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useFetch } from '../hooks/useFetch.js';
 import { Badge, Button, Card, Checkbox, ErrorMessage, Field, Input, PanelHeader, Select } from '../components/ui.jsx';
@@ -12,6 +17,7 @@ import { ConfirmDialog, PromptDialog } from '../components/Dialogs.jsx';
 
 const TABS = [
   ['categories', 'Categories'],
+  ['units', 'Units'],
   ['locations', 'Locations'],
   ['users', 'People'],
 ];
@@ -44,6 +50,7 @@ export function Admin() {
       </div>
 
       {tab === 'categories' && <Categories />}
+      {tab === 'units' && <Units />}
       {tab === 'locations' && <Locations />}
       {tab === 'users' && <Users />}
     </div>
@@ -155,6 +162,103 @@ function Categories() {
             await categoriesApi.remove(deleting.id);
             state.reload();
           }}
+        />
+        )}
+      </div>
+      )}
+    </Panel>
+  );
+}
+
+/** Units are a maintained list for the same reason categories are (goal 2). */
+function Units() {
+  const state = useFetch(() => unitsApi.list(), []);
+  const [code, setCode] = useState('');
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [renaming, setRenaming] = useState(null);
+  const [deleting, setDeleting] = useState(null);
+
+  const run = async (fn) => {
+    setError(null);
+    setBusy(true);
+    try { await fn(); state.reload(); } catch (err) { setError(err); } finally { setBusy(false); }
+  };
+
+  return (
+    <Panel state={state}>
+      {(data) => (
+      <div className="space-y-4">
+        <Card>
+          <PanelHeader
+            title="Add a unit"
+            description="What item quantities are counted in — each, box, metre"
+          />
+          <form
+            className="flex flex-wrap items-end gap-2 p-4"
+            onSubmit={(e) => { e.preventDefault(); run(async () => { await unitsApi.create({ code }); setCode(''); }); }}
+          >
+            <div className="min-w-56 flex-1">
+              <Field label="New unit">
+                <Input value={code} onChange={(e) => setCode(e.target.value)} required maxLength={32} placeholder="e.g. pallet" />
+              </Field>
+            </div>
+            <Button type="submit" disabled={busy || !code.trim()}>
+              <IconPlus className="h-4 w-4" />
+              Add unit
+            </Button>
+            <ErrorMessage error={error} className="w-full" />
+          </form>
+        </Card>
+
+        <Card className="overflow-hidden">
+          <ul className="divide-y divide-slate-100">
+            {data.units.map((unit) => (
+              <li key={unit.id} className="flex items-center gap-3 px-4 py-2.5 text-[13px] transition-colors hover:bg-slate-50">
+                <span className="flex-1 font-medium text-slate-900">{unit.code}</span>
+                <Badge tone="neutral">{unit._count.items} item{unit._count.items === 1 ? '' : 's'}</Badge>
+                <Button size="sm" variant="ghost" disabled={busy} onClick={() => setRenaming(unit)}>
+                  Rename
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={busy}
+                  className="hover:bg-rose-50 hover:text-rose-700"
+                  onClick={() => setDeleting(unit)}
+                >
+                  Delete
+                </Button>
+              </li>
+            ))}
+          </ul>
+          <p className="border-t border-slate-100 bg-slate-50/60 px-4 py-2.5 text-[12px] text-slate-500">
+            Renaming a unit changes how it reads everywhere it is used. An item's unit cannot be
+            changed once movements have been recorded against it.
+          </p>
+        </Card>
+
+        {renaming && (
+        <PromptDialog
+          open
+          title="Rename unit"
+          label="Unit"
+          initialValue={renaming.code}
+          maxLength={32}
+          confirmLabel="Rename"
+          onClose={() => setRenaming(null)}
+          onConfirm={async (next) => { await unitsApi.update(renaming.id, { code: next }); state.reload(); }}
+        />
+        )}
+
+        {deleting && (
+        <ConfirmDialog
+          open
+          title="Delete unit"
+          description={`Delete "${deleting.code}"? This cannot be undone. A unit still used by any item cannot be deleted.`}
+          confirmLabel="Delete unit"
+          onClose={() => setDeleting(null)}
+          onConfirm={async () => { await unitsApi.remove(deleting.id); state.reload(); }}
         />
         )}
       </div>
