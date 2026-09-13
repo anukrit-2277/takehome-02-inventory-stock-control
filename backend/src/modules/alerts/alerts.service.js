@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 
-import { prisma } from '../../lib/prisma.js';
+import { prisma, TRANSACTION_OPTIONS } from '../../lib/prisma.js';
 import { conflict, notFound } from '../../lib/errors.js';
 import { toSkipTake, withPageInfo } from '../../lib/pagination.js';
 
@@ -88,7 +88,7 @@ export async function dismissAlert(itemId, actor) {
     if (active) throw conflict(`${item.sku} has already been dismissed`);
 
     return tx.alertDismissal.create({ data: { itemId, dismissedById: actor.id } });
-  });
+  }, TRANSACTION_OPTIONS);
 }
 
 /** Undoes a dismissal, for when one was made by mistake. */

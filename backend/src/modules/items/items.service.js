@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 
-import { prisma } from '../../lib/prisma.js';
+import { prisma, TRANSACTION_OPTIONS } from '../../lib/prisma.js';
 import { toSkipTake, withPageInfo } from '../../lib/pagination.js';
 import { resolveDismissalIfRecovered } from '../alerts/alerts.service.js';
 import { badRequest, conflict, notFound } from '../../lib/errors.js';
@@ -33,7 +33,7 @@ export async function createItem(data, actor) {
       data: { itemId: item.id, type: 'CREATED', newValue: item.sku, actorId: actor.id },
     });
     return item;
-  });
+  }, TRANSACTION_OPTIONS);
 }
 
 export async function updateItem(id, data, actor) {
@@ -51,7 +51,7 @@ export async function updateItem(id, data, actor) {
       await resolveDismissalIfRecovered(tx, id);
     }
     return after;
-  });
+  }, TRANSACTION_OPTIONS);
 }
 
 /**
@@ -86,7 +86,7 @@ async function setArchived(id, archived, actor) {
       data: { itemId: id, type: archived ? 'ARCHIVED' : 'RESTORED', actorId: actor.id },
     });
     return updated;
-  });
+  }, TRANSACTION_OPTIONS);
 }
 
 /** Writes one timeline entry per field that actually changed. */

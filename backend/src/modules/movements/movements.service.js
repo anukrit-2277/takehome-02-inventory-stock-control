@@ -1,4 +1,4 @@
-import { prisma } from '../../lib/prisma.js';
+import { prisma, TRANSACTION_OPTIONS } from '../../lib/prisma.js';
 import { conflict, forbidden, notFound } from '../../lib/errors.js';
 import { assertCanActAtLocations } from '../../lib/access.js';
 import { resolveDismissalIfRecovered } from '../alerts/alerts.service.js';
@@ -80,7 +80,7 @@ export async function recordMovement(input, actor) {
     await resolveDismissalIfRecovered(tx, input.itemId);
 
     return movement;
-  });
+  }, TRANSACTION_OPTIONS);
 }
 
 /**

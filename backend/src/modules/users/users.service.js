@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 
-import { prisma } from '../../lib/prisma.js';
+import { prisma, TRANSACTION_OPTIONS } from '../../lib/prisma.js';
 import { badRequest, notFound } from '../../lib/errors.js';
 
 // Shared shape for every user we return. Chosen explicitly so a password hash
@@ -68,7 +68,7 @@ export async function setAssignments(userId, locationIds, actor) {
     }
 
     return present(await tx.user.findUnique({ where: { id: userId }, select: userSelect }));
-  });
+  }, TRANSACTION_OPTIONS);
 }
 
 async function findOrThrow(id) {
