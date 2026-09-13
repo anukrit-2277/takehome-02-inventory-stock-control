@@ -3,18 +3,29 @@ import { z } from 'zod';
 /**
  * A person's name.
  *
- * The only structural rule is that it contains at least one letter, which
- * rejects "12345" and "!!!" without inventing rules about what a real name looks
- * like. Deliberately permissive about scripts, accents, hyphens, apostrophes and
- * digits — "José Ramírez-O'Neill" and "Jean-Luc" are names, and an internal tool
- * has no business rejecting them.
+ * Letters, spaces, hyphens, apostrophes and full stops only — no digits and no
+ * other symbols, because a person is not called "demo1". It must also start
+ * with a letter, which rules out "-Ann" and ".".
+ *
+ * \p{L} matches letters in any script and \p{M} matches combining accents, so
+ * "José Ramírez-O'Neill", "Jean-Luc", "St. John" and "张伟" are all fine. Being
+ * strict about digits is a deliberate trade-off: it rejects the rare name that
+ * genuinely contains one, and that is the right call for an internal tool where
+ * the realistic input is a placeholder, not an unusual name.
+ *
+ * Item names are validated separately and DO allow digits — "M8 Hex Bolt 40mm"
+ * is a perfectly good product name.
  */
 const personName = z
   .string()
   .trim()
   .min(2, 'Name must be at least 2 characters')
   .max(120, 'Name must be 120 characters or fewer')
-  .regex(/\p{L}/u, 'Name must contain at least one letter');
+  .regex(/^\p{L}/u, 'Name must start with a letter')
+  .regex(
+    /^[\p{L}\p{M}\s'.-]+$/u,
+    'Name can only contain letters, spaces, hyphens and apostrophes',
+  );
 
 /**
  * Password strength.

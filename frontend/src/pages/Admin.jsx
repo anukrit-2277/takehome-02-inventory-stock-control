@@ -346,9 +346,21 @@ function NewUserModal({ open, onClose, onSaved }) {
   const passwordStrong = met.every(Boolean);
   const retyped = form.confirmPassword.length > 0;
   const passwordsMatch = form.password === form.confirmPassword;
-  const nameHasLetter = /\p{L}/u.test(form.name);
+  // Mirrors personName in users.schemas.js: starts with a letter, then letters,
+  // spaces, hyphens, apostrophes and full stops only. No digits.
+  const trimmedName = form.name.trim();
+  const nameValid = trimmedName.length >= 2 && /^\p{L}[\p{L}\p{M}\s'.-]*$/u.test(trimmedName);
+  const nameError = form.name.length === 0
+    ? undefined
+    : !/^\p{L}/u.test(trimmedName)
+      ? 'Name must start with a letter'
+      : !/^[\p{L}\p{M}\s'.-]+$/u.test(trimmedName)
+        ? 'Name can only contain letters, spaces, hyphens and apostrophes'
+        : trimmedName.length < 2
+          ? 'Name must be at least 2 characters'
+          : undefined;
 
-  const canSubmit = passwordStrong && retyped && passwordsMatch && nameHasLetter && form.name.trim().length >= 2;
+  const canSubmit = passwordStrong && retyped && passwordsMatch && nameValid;
 
   async function submit(event) {
     event.preventDefault();
@@ -373,7 +385,8 @@ function NewUserModal({ open, onClose, onSaved }) {
       <form onSubmit={submit} className="space-y-4">
         <Field
           label="Name"
-          error={form.name.length > 0 && !nameHasLetter ? 'Name must contain at least one letter' : undefined}
+          error={nameError}
+          hint={nameError ? undefined : 'Letters, spaces, hyphens and apostrophes'}
         >
           <Input value={form.name} onChange={set('name')} required maxLength={120} placeholder="Priya Raman" />
         </Field>
