@@ -324,19 +324,40 @@ function Users() {
   );
 }
 
+// Mirrors the server's rules in users.schemas.js. Shown live so the person
+// filling the form can see what is still missing, instead of submitting and
+// being told afterwards. The server remains the thing that actually decides.
+const PASSWORD_RULES = [
+  { label: 'At least 8 characters', test: (v) => v.length >= 8 },
+  { label: 'An uppercase letter', test: (v) => /[A-Z]/.test(v) },
+  { label: 'A lowercase letter', test: (v) => /[a-z]/.test(v) },
+  { label: 'A number', test: (v) => /[0-9]/.test(v) },
+  { label: 'A symbol', test: (v) => /[^A-Za-z0-9]/.test(v) },
+];
+
 function NewUserModal({ open, onClose, onSaved }) {
-  const blank = { email: '', name: '', password: '', role: 'STAFF' };
+  const blank = { email: '', name: '', password: '', confirmPassword: '', role: 'STAFF' };
   const [form, setForm] = useState(blank);
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
   const set = (field) => (e) => setForm({ ...form, [field]: e.target.value });
+
+  const met = PASSWORD_RULES.map((rule) => rule.test(form.password));
+  const passwordStrong = met.every(Boolean);
+  const retyped = form.confirmPassword.length > 0;
+  const passwordsMatch = form.password === form.confirmPassword;
+  const nameHasLetter = /\p{L}/u.test(form.name);
+
+  const canSubmit = passwordStrong && retyped && passwordsMatch && nameHasLetter && form.name.trim().length >= 2;
 
   async function submit(event) {
     event.preventDefault();
     setError(null);
     setSaving(true);
     try {
-      await usersApi.create(form);
+      // confirmPassword is a form-only field; the API never receives it.
+      const { confirmPassword, ...payload } = form;
+      await usersApi.create(payload);
       setForm(blank);
       onSaved();
       onClose();
@@ -350,21 +371,67 @@ function NewUserModal({ open, onClose, onSaved }) {
   return (
     <Modal open={open} title="Add a person" onClose={onClose}>
       <form onSubmit={submit} className="space-y-4">
-        <Field label="Name"><Input value={form.name} onChange={set('name')} required maxLength={120} /></Field>
-        <Field label="Email"><Input type="email" value={form.email} onChange={set('email')} required /></Field>
-        <Field label="Password" hint="At least 8 characters">
-          <Input type="password" value={form.password} onChange={set('password')} required minLength={8} />
+        <Field
+          label="Name"
+          error={form.name.length > 0 && !nameHasLetter ? 'Name must contain at least one letter' : undefined}
+        >
+          <Input value={form.name} onChange={set('name')} required maxLength={120} placeholder="Priya Raman" />
         </Field>
+
+        <Field label="Email">
+          <Input type="email" value={form.email} onChange={set('email')} required placeholder="person@company.com" />
+        </Field>
+
+        <div>
+          <Field label="Password">
+            <Input type="password" value={form.password} onChange={set('password')} required autoComplete="new-password" />
+          </Field>
+          <ul className="mt-2 grid gap-1 sm:grid-cols-2">
+            {PASSWORD_RULES.map((rule, index) => (
+              <li
+                key={rule.label}
+                className={`flex items-center gap-1.5 text-[11px] ${met[index] ? 'text-emerald-600' : 'text-slate-400'}`}
+              >
+                <span
+                  className={`flex h-3.5 w-3.5 items-center justify-center rounded-full text-[8px] ${
+                    met[index] ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-transparent'
+                  }`}
+                >
+                  ✓
+                </span>
+                {rule.label}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <Field
+          label="Retype password"
+          error={retyped && !passwordsMatch ? 'Passwords do not match' : undefined}
+        >
+          <Input
+            type="password"
+            value={form.confirmPassword}
+            onChange={set('confirmPassword')}
+            required
+            autoComplete="new-password"
+          />
+        </Field>
+
         <Field label="Role">
           <Select value={form.role} onChange={set('role')}>
             <option value="STAFF">Warehouse staff</option>
             <option value="MANAGER">Inventory manager</option>
           </Select>
         </Field>
+
         <ErrorMessage error={error} />
+
         <div className="-mx-5 -mb-4 mt-5 flex justify-end gap-2 border-t border-slate-200/80 bg-slate-50/60 px-5 py-3">
           <Button variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button type="submit" disabled={saving}>{saving ? 'Adding…' : 'Add person'}</Button>
+          <Button type="submit" disabled={saving || !canSubmit}>
+            {saving ? 'Adding…' : 'Add person'}
+          </Button>
         </div>
       </form>
     </Modal>

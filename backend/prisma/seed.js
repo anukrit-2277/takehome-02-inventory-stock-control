@@ -11,7 +11,9 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '../src/lib/prisma.js';
 import { recordMovement } from '../src/modules/movements/movements.service.js';
 
-const PASSWORD = 'Passw0rd!';
+// Meets the strength rules in users.schemas.js: length, upper, lower,
+// number and symbol. Published in SUBMISSION.md, so it is meant to be typed.
+const PASSWORD = 'Inventory@2026';
 
 const USERS = [
   { email: 'manager@demo.test', name: 'Priya Raman', role: 'MANAGER' },

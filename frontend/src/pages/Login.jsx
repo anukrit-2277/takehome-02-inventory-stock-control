@@ -39,7 +39,7 @@ export function Login() {
 
   function useDemoAccount(demoEmail) {
     setEmail(demoEmail);
-    setPassword('Passw0rd!');
+    setPassword('Inventory@2026');
   }
 
   return (
@@ -117,7 +117,7 @@ export function Login() {
                 </button>
               ))}
             </div>
-            <p className="mt-2 text-[11px] text-slate-400">Password for both: Passw0rd!</p>
+            <p className="mt-2 text-[11px] text-slate-400">Password for both: Inventory@2026</p>
           </div>
         </Card>
       </div>
