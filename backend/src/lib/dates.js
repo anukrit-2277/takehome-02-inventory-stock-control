@@ -31,3 +31,26 @@ export function toDateKey(date) {
   const pad = (n) => String(n).padStart(2, '0');
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
+
+/**
+ * True when a date string names a day that actually exists.
+ *
+ * JavaScript rolls impossible dates forward: new Date('2026-02-30') is 2 March
+ * and new Date('2026-02-29') is 1 March, because 2026 is not a leap year. Left
+ * alone, a CSV row dated 30 February would be filed under a day nobody typed —
+ * and movements are append-only, so that date could never be corrected.
+ * Anything that is not a plain "YYYY-MM-DD..." string is left to Date parsing.
+ */
+export function isRealCalendarDate(value) {
+  if (typeof value !== 'string') return true;
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value.trim());
+  if (!match) return true;
+
+  const [, year, month, day] = match;
+  const parsed = new Date(`${year}-${month}-${day}T00:00:00Z`);
+  return (
+    parsed.getUTCFullYear() === Number(year) &&
+    parsed.getUTCMonth() + 1 === Number(month) &&
+    parsed.getUTCDate() === Number(day)
+  );
+}

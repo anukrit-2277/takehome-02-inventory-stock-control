@@ -1,14 +1,18 @@
 import { z } from 'zod';
 import { paginationSchema } from '../../lib/pagination.js';
+import { isRealCalendarDate } from '../../lib/dates.js';
 
 const positiveQuantity = z.number().int().positive('Quantity must be a positive whole number');
 const locationId = z.number().int().positive();
 
 // Recorded time is optional so historical rows can be imported; it can never be
-// in the future, because the ledger is a record of what already happened.
-const occurredAt = z.coerce
-  .date()
-  .max(new Date(8.64e15), 'Invalid date')
+// in the future, because the ledger is a record of what already happened. The
+// raw value is checked before parsing because JavaScript rolls impossible dates
+// forward, and an append-only ledger can never correct a date it shifted.
+const occurredAt = z
+  .union([z.string(), z.date()])
+  .refine(isRealCalendarDate, 'occurredAt is not a real calendar date')
+  .pipe(z.coerce.date().max(new Date(8.64e15), 'Invalid date'))
   .refine((d) => d <= new Date(), 'occurredAt cannot be in the future')
   .optional();
 

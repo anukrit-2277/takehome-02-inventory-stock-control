@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { isRealCalendarDate } from '../../lib/dates.js';
+
 // CSV values are always strings, so numbers and dates are coerced here rather
 // than reusing the JSON schemas.
 
@@ -32,8 +34,12 @@ export const receiptRowSchema = z.object({
   sku: required('SKU', 64).toUpperCase(),
   locationCode: required('Location', 32).toUpperCase(),
   quantity: wholeNumber('Quantity').positive('Quantity must be greater than zero'),
-  occurredAt: z.coerce
-    .date({ error: 'Date is not a valid date' })
+  // Checked as a string first: JavaScript turns 2026-02-30 into 2 March rather
+  // than rejecting it, which would file the receipt under a day nobody typed.
+  occurredAt: z
+    .string()
+    .refine(isRealCalendarDate, 'Date is not a real calendar date')
+    .pipe(z.coerce.date({ error: 'Date is not a valid date' }))
     .refine((d) => d <= new Date(), 'Date cannot be in the future')
     .optional(),
   note: z.string().trim().max(2000).optional(),
