@@ -10,7 +10,7 @@ venv/
 .env.*.local
 *.log
 .DS_Store
-
+PROJECT_GUIDE.md
 
 # per-project deps/builds
 backend/node_modules/
